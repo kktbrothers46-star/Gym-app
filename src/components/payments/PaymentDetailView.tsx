@@ -74,9 +74,9 @@ function getPlanDurationLabel(planName: string): string {
 export const PaymentDetailView: React.FC<PaymentDetailViewProps> = ({
   payment,
   member,
-  gymName = 'MuscleFit Gym',
-  gymLocation = 'Indiranagar, Bengaluru',
-  gymPhone = '+91 98765 43210',
+  gymName = 'Gym Business OS',
+  gymLocation = '',
+  gymPhone = '',
   onBack,
   onViewMember,
   onCollectBalance,

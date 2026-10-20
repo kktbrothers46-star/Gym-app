@@ -11,8 +11,6 @@ import { BannerCard } from './components/dashboard/BannerCard';
 import { BusinessOverview } from './components/dashboard/BusinessOverview';
 import { QuickActions } from './components/dashboard/QuickActions';
 import { AttentionSection } from './components/dashboard/AttentionSection';
-import { RevenueChart } from './components/dashboard/RevenueChart';
-import { RecentActivitySection } from './components/dashboard/RecentActivity';
 import { BottomNav, NavTab } from './components/dashboard/BottomNav';
 
 import { MembersScreen } from './components/members/MembersScreen';
@@ -724,7 +722,6 @@ export default function App() {
                 setReportsView('notifications');
                 setActiveTab('reports');
               }}
-              onViewSplash={() => setCurrentScreen('splash')}
               onOpenGymSettings={() => {
                 setReportsView('gym_settings');
                 setActiveTab('reports');
@@ -737,10 +734,6 @@ export default function App() {
                 setReportsView('support');
                 setActiveTab('reports');
               }}
-              onOpenOnboarding={() => {
-                resetOnboarding();
-                setCurrentScreen('onboarding');
-              }}
             />
 
             {/* Motivational Hero Banner */}
@@ -748,7 +741,7 @@ export default function App() {
               <BannerCard />
             </div>
 
-            {/* B. Business Overview */}
+            {/* B. Business Overview with Today's Attendance and Daily Pulse */}
             <BusinessOverview
               state={state}
               onOpenMembers={handleOpenMembersFilter}
@@ -760,6 +753,7 @@ export default function App() {
                 setReportsView('revenue');
                 setActiveTab('reports');
               }}
+              onOpenAttendance={() => setActiveTab('attendance')}
             />
 
             {/* C. Quick Actions */}
@@ -780,53 +774,16 @@ export default function App() {
               onSeeAllActions={() => setActiveTab('plans')}
             />
 
-            {/* D. Needs Your Attention */}
+            {/* D. Needs Your Attention: Overdue, Expiring, Follow-Ups Due */}
             <AttentionSection
               state={state}
               onFilterMembers={(filter) => handleOpenMembersFilter(filter)}
               onSeeAllAttention={() => handleOpenMembersFilter('overdue')}
+              onOpenFollowUps={() => {
+                setMembersView('followups');
+                setActiveTab('members');
+              }}
             />
-
-            {/* E. Revenue Trend */}
-            <RevenueChart
-              metrics={state.monthlyMetrics}
-              isEmptyState={state.isEmptyState}
-            />
-
-            {/* F. Recent Activity */}
-            <RecentActivitySection
-              activities={state.activities}
-              isEmptyState={state.isEmptyState}
-            />
-
-            {/* Helper Utilities Bar: Onboarding & Navigation */}
-            <div className="mt-4 pt-3 border-t border-[#E5E0D6] flex flex-wrap items-center justify-between gap-2 text-[10.5px] text-[#71717A] px-1">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    resetOnboarding();
-                    setCurrentScreen('onboarding');
-                  }}
-                  className="px-2.5 py-1 rounded-lg bg-white border border-[#E5E0D6] hover:text-[#1E3A8A] font-medium cursor-pointer"
-                >
-                  Onboarding Flow
-                </button>
-
-                <button
-                  onClick={() => setCurrentScreen('splash')}
-                  className="px-2.5 py-1 rounded-lg bg-white border border-[#E5E0D6] hover:text-[#1E3A8A] font-medium cursor-pointer"
-                >
-                  View Splash Screen
-                </button>
-              </div>
-
-              <button
-                onClick={resetToDefault}
-                className="hover:underline text-[#71717A] cursor-pointer"
-              >
-                Reset Store
-              </button>
-            </div>
           </main>
         )}
 

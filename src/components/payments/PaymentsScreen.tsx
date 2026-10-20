@@ -52,7 +52,7 @@ interface PaymentsScreenProps {
 }
 
 interface PaymentAdvancedFilters {
-  paymentMethod: 'all' | 'UPI' | 'Cash' | 'Card' | 'Bank Transfer';
+  paymentMethod: 'all' | 'UPI' | 'Cash' | 'Card' | 'Bank Transfer' | 'Other';
   planType: 'all' | 'monthly' | 'quarterly' | 'half_yearly' | 'annual';
   period: 'all' | 'this_month' | 'earlier';
 }
@@ -74,7 +74,7 @@ export interface EnrichedPaymentItem {
   dueDate?: string;
   month: string;
   uiStatus: 'paid' | 'partial' | 'pending' | 'overdue' | 'refunded';
-  paymentMethod: 'UPI' | 'Cash' | 'Card' | 'Bank Transfer';
+  paymentMethod: 'UPI' | 'Cash' | 'Card' | 'Bank Transfer' | 'Other';
   receiptNumber: string;
   referenceId?: string;
   notes?: string;
@@ -133,7 +133,7 @@ function getPlanBadgeStyle(planName: string): { label: string; className: string
   };
 }
 
-function getMethodIcon(method: 'UPI' | 'Cash' | 'Card' | 'Bank Transfer') {
+function getMethodIcon(method: 'UPI' | 'Cash' | 'Card' | 'Bank Transfer' | 'Other') {
   switch (method) {
     case 'UPI':
       return <Smartphone className="w-3 h-3 text-[#102A71]" />;
@@ -143,6 +143,9 @@ function getMethodIcon(method: 'UPI' | 'Cash' | 'Card' | 'Bank Transfer') {
       return <CreditCard className="w-3 h-3 text-[#7C3AED]" />;
     case 'Bank Transfer':
       return <Building2 className="w-3 h-3 text-[#D97706]" />;
+    case 'Other':
+    default:
+      return <Wallet className="w-3 h-3 text-[#71717A]" />;
   }
 }
 
@@ -232,7 +235,7 @@ export const PaymentsScreen: React.FC<PaymentsScreenProps> = ({
         memberId: p.memberId,
         memberName: member?.name || p.memberName,
         memberCode: member?.memberCode || p.memberCode || `MBR${String(idx + 1).padStart(3, '0')}`,
-        phone: member?.phone || '98765 43210',
+        phone: member?.phone || '',
         photoUrl: member?.photoUrl,
         plan: p.plan || member?.membershipPlan || 'Monthly Plan',
         planFee: inferredPlanFee,

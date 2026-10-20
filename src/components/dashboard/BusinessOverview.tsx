@@ -13,6 +13,7 @@ import {
   TrendingUp,
   Calendar,
   ChevronDown,
+  CheckCircle2,
 } from 'lucide-react';
 import { GymStoreState } from '../../types/dashboard';
 
@@ -21,6 +22,7 @@ interface BusinessOverviewProps {
   onOpenMembers: (filter?: string) => void;
   onOpenPayments: () => void;
   onOpenProfitReport: () => void;
+  onOpenAttendance?: () => void;
 }
 
 export const BusinessOverview: React.FC<BusinessOverviewProps> = ({
@@ -28,6 +30,7 @@ export const BusinessOverview: React.FC<BusinessOverviewProps> = ({
   onOpenMembers,
   onOpenPayments,
   onOpenProfitReport,
+  onOpenAttendance,
 }) => {
   const [selectedMonth, setSelectedMonth] = useState(
     () => state.selectedMonth || new Date().toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
@@ -258,56 +261,54 @@ export const BusinessOverview: React.FC<BusinessOverviewProps> = ({
           </div>
         </div>
 
-        {/* CARD 4: Total Members */}
-        <div
-          onClick={() => onOpenMembers('all')}
-          className="relative bg-[#FAF5FF] border border-[#F3E8FF] rounded-xl sm:rounded-2xl p-2.5 sm:p-3 flex flex-col justify-between hover:shadow-xs hover:border-[#E9D5FF] transition-all cursor-pointer group"
-          role="button"
-          tabIndex={0}
-          aria-label={`Total Members: ${state.totalMembersCount}`}
-        >
-          <div>
-            {/* Top row: Icon */}
-            <div className="w-7 h-7 rounded-md bg-[#F3E8FF] flex items-center justify-center text-[#7E22CE] mb-1">
-              <BarChart3 className="w-3.5 h-3.5" />
-            </div>
+        {/* CARD 4: Today's Attendance */}
+        {(() => {
+          const todayIso = new Date().toISOString().split('T')[0];
+          const todayCheckIns = (state.attendance || []).filter((a) => a.date === todayIso).length;
+          return (
+            <div
+              onClick={() => (onOpenAttendance ? onOpenAttendance() : onOpenMembers('active'))}
+              className="relative bg-[#FAF5FF] border border-[#F3E8FF] rounded-xl sm:rounded-2xl p-2.5 sm:p-3 flex flex-col justify-between hover:shadow-xs hover:border-[#E9D5FF] transition-all cursor-pointer group"
+              role="button"
+              tabIndex={0}
+              aria-label={`Today's Attendance: ${todayCheckIns} Present`}
+            >
+              <div>
+                {/* Top row: Icon */}
+                <div className="w-7 h-7 rounded-md bg-[#F3E8FF] flex items-center justify-center text-[#7E22CE] mb-1">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                </div>
 
-            {/* Label */}
-            <span className="text-[#71717A] text-[11px] sm:text-[11.5px] font-medium block leading-tight">
-              Total Members
-            </span>
-
-            {/* Metric Value */}
-            <div className="text-[19px] sm:text-[21px] font-bold text-[#191919] tracking-tight leading-none mt-1">
-              {state.isEmptyState ? '0' : state.totalMembersCount.toLocaleString('en-IN')}
-            </div>
-          </div>
-
-          {/* Footer: Trend Delta + Chevron */}
-          <div className="flex items-center justify-between mt-1.5 pt-1 border-t border-[#F5E9FF]">
-            <div className="flex items-center gap-1 text-[10px]">
-              {state.isEmptyState || state.totalMembersCount === 0 ? (
-                <span className="text-[#71717A] font-medium">No members yet</span>
-              ) : membersDeltaPct !== null ? (
-                <>
-                  <span className="text-[#22C55E] font-semibold flex items-center">
-                    <TrendingUp className="w-2.5 h-2.5 mr-0.5" />
-                    {membersDeltaPct >= 0 ? `+${membersDeltaPct}%` : `${membersDeltaPct}%`}
-                  </span>
-                  <span className="text-[#71717A] hidden sm:inline">vs last month</span>
-                </>
-              ) : (
-                <span className="text-[#7E22CE] font-semibold">
-                  {state.activeMembersCount} active
+                {/* Label */}
+                <span className="text-[#71717A] text-[11px] sm:text-[11.5px] font-medium block leading-tight">
+                  Today's Attendance
                 </span>
-              )}
-            </div>
 
-            <div className="w-4.5 h-4.5 rounded-full bg-white flex items-center justify-center text-[#71717A] border border-[#F3E8FF] group-hover:text-[#7E22CE] group-hover:border-[#7E22CE] transition-colors">
-              <ChevronRight className="w-2.5 h-2.5" />
+                {/* Metric Value */}
+                <div className="text-[19px] sm:text-[21px] font-bold text-[#191919] tracking-tight leading-none mt-1">
+                  {state.isEmptyState ? '0' : todayCheckIns}
+                </div>
+              </div>
+
+              {/* Footer: Contextual info + Chevron */}
+              <div className="flex items-center justify-between mt-1.5 pt-1 border-t border-[#F5E9FF]">
+                <div className="flex items-center gap-1 text-[10px]">
+                  {state.isEmptyState || state.activeMembersCount === 0 ? (
+                    <span className="text-[#71717A] font-medium">No check-ins yet</span>
+                  ) : (
+                    <span className="text-[#7E22CE] font-semibold">
+                      {todayCheckIns} of {state.activeMembersCount} active
+                    </span>
+                  )}
+                </div>
+
+                <div className="w-4.5 h-4.5 rounded-full bg-white flex items-center justify-center text-[#71717A] border border-[#F3E8FF] group-hover:text-[#7E22CE] group-hover:border-[#7E22CE] transition-colors">
+                  <ChevronRight className="w-2.5 h-2.5" />
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+          );
+        })()}
 
       </div>
     </section>

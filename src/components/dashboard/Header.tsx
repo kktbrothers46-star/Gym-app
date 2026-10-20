@@ -13,11 +13,9 @@ interface HeaderProps {
   onUpdateGymName: (name: string) => void;
   onOpenSearch: () => void;
   onOpenNotifications: () => void;
-  onViewSplash: () => void;
   onOpenGymSettings?: () => void;
   onOpenHelpSupport?: () => void;
   onOpenStaffPermissions?: () => void;
-  onOpenOnboarding?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -26,11 +24,9 @@ export const Header: React.FC<HeaderProps> = ({
   onUpdateGymName,
   onOpenSearch,
   onOpenNotifications,
-  onViewSplash,
   onOpenGymSettings,
   onOpenHelpSupport,
   onOpenStaffPermissions,
-  onOpenOnboarding,
 }) => {
   const [isGymDropdownOpen, setIsGymDropdownOpen] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
@@ -183,19 +179,6 @@ export const Header: React.FC<HeaderProps> = ({
                           <span className="text-[10px] text-[#1E3A8A] font-bold">FAQs & Help</span>
                         </button>
                       )}
-                      {onOpenOnboarding && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsGymDropdownOpen(false);
-                            onOpenOnboarding();
-                          }}
-                          className="w-full px-2 py-1.5 rounded-lg text-left text-[11.5px] font-semibold text-[#191919] hover:bg-[#F4F1EA] flex items-center justify-between cursor-pointer"
-                        >
-                          <span>Setup Onboarding</span>
-                          <span className="text-[10px] text-[#16A34A] font-bold">7-Step Guide</span>
-                        </button>
-                      )}
                     </div>
                   )}
                 </div>
@@ -236,12 +219,12 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </button>
 
-        {/* Brand Squircle Dumbbell Emblem (Can view splash screen on click) */}
-        <button
-          onClick={onViewSplash}
-          className="w-9 h-9 rounded-xl bg-[#1E3A8A] hover:bg-[#163172] active:scale-95 transition-all flex items-center justify-center text-white shadow-xs group"
-          aria-label="Gym Business OS Emblem (Click to preview Splash Screen)"
-          title="View Splash Screen"
+        {/* Brand Squircle Dumbbell Emblem */}
+        <div
+          onClick={onOpenGymSettings}
+          className="w-9 h-9 rounded-xl bg-[#102A71] hover:bg-[#0D225D] active:scale-95 transition-all flex items-center justify-center text-white shadow-xs group cursor-pointer"
+          aria-label="Gym Business OS Emblem"
+          title="Gym Profile & Settings"
         >
           {/* Subtle dumbbell mark */}
           <svg
@@ -255,7 +238,7 @@ export const Header: React.FC<HeaderProps> = ({
             <rect x="58.5" y="32" width="7.5" height="36" rx="3.75" fill="#FFFFFF" />
             <rect x="67" y="38" width="7" height="24" rx="3.5" fill="#FFFFFF" />
           </svg>
-        </button>
+        </div>
       </div>
     </header>
   );

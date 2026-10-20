@@ -672,7 +672,7 @@ export function useGymStore() {
     memberId: string;
     memberName: string;
     amount: number;
-    paymentMethod: 'UPI' | 'Cash' | 'Card' | 'Bank Transfer';
+    paymentMethod: 'UPI' | 'Cash' | 'Card' | 'Bank Transfer' | 'Other';
     plan: string;
     planFee?: number;
     notes?: string;

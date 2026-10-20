@@ -203,7 +203,7 @@ export interface Payment {
   dueDate?: string;
   month: string; // e.g. "MMM YYYY"
   status: 'completed' | 'partial' | 'pending' | 'overdue' | 'refunded';
-  paymentMethod: 'UPI' | 'Cash' | 'Card' | 'Bank Transfer';
+  paymentMethod: 'UPI' | 'Cash' | 'Card' | 'Bank Transfer' | 'Other';
   plan: string;
   receiptNumber?: string;
   referenceId?: string;
@@ -290,6 +290,8 @@ export type LeadStatus =
   | 'New'
   | 'Contacted'
   | 'Interested'
+  | 'Joined'
+  | 'Not Interested'
   | 'Trial'
   | 'Converted'
   | 'Lost';

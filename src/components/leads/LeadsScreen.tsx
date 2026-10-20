@@ -147,14 +147,33 @@ function getInterestedPlanPillStyle(planName?: string): { label: string; classNa
   };
 }
 
+export type UILeadStatusFilter = 'All' | 'New' | 'Contacted' | 'Interested' | 'Joined' | 'Not Interested';
+
+export function isLeadJoined(status: LeadStatus): boolean {
+  return status === 'Joined' || status === 'Converted';
+}
+
+export function isLeadNotInterested(status: LeadStatus): boolean {
+  return status === 'Not Interested' || status === 'Lost';
+}
+
+export function normalizeLeadStatus(
+  status: LeadStatus
+): 'New' | 'Contacted' | 'Interested' | 'Joined' | 'Not Interested' {
+  if (status === 'Converted' || status === 'Joined') return 'Joined';
+  if (status === 'Lost' || status === 'Not Interested') return 'Not Interested';
+  if (status === 'Trial') return 'Interested';
+  return status as 'New' | 'Contacted' | 'Interested';
+}
+
 function isFollowUpDueOrOverdue(lead: Lead): boolean {
-  if (lead.status === 'Converted' || lead.status === 'Lost') return false;
+  if (isLeadJoined(lead.status) || isLeadNotInterested(lead.status)) return false;
   if (!lead.nextFollowUpDate) return false;
   return lead.nextFollowUpDate <= REFERENCE_TODAY;
 }
 
 function isFollowUpOverdue(lead: Lead): boolean {
-  if (lead.status === 'Converted' || lead.status === 'Lost') return false;
+  if (isLeadJoined(lead.status) || isLeadNotInterested(lead.status)) return false;
   if (!lead.nextFollowUpDate) return false;
   return lead.nextFollowUpDate < REFERENCE_TODAY;
 }
@@ -178,9 +197,7 @@ export const LeadsScreen: React.FC<LeadsScreenProps> = ({
   onAddFollowUp,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedStatusTab, setSelectedStatusTab] = useState<
-    'All' | 'New' | 'Contacted' | 'Interested' | 'Trial' | 'Converted' | 'Lost'
-  >('All');
+  const [selectedStatusTab, setSelectedStatusTab] = useState<UILeadStatusFilter>('All');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'followup'>('newest');
   const [isSortDropdownOpen, setIsSortDropdownOpen] = useState(false);
 
@@ -255,9 +272,9 @@ export const LeadsScreen: React.FC<LeadsScreenProps> = ({
     const newLeads = effectiveLeads.filter((l) => l.status === 'New').length;
     const followUpsDue = effectiveLeads.filter((l) => isFollowUpDueOrOverdue(l)).length;
     const overdueCount = effectiveLeads.filter((l) => isFollowUpOverdue(l)).length;
-    const convertedCount = effectiveLeads.filter((l) => l.status === 'Converted').length;
+    const joinedCount = effectiveLeads.filter((l) => isLeadJoined(l.status)).length;
     const conversionRate =
-      totalLeads > 0 ? Math.round((convertedCount / totalLeads) * 100) : 0;
+      totalLeads > 0 ? Math.round((joinedCount / totalLeads) * 100) : 0;
 
     return {
       totalLeads,
@@ -265,7 +282,8 @@ export const LeadsScreen: React.FC<LeadsScreenProps> = ({
       newLeads,
       followUpsDue,
       overdueCount,
-      convertedCount,
+      joinedCount,
+      convertedCount: joinedCount,
       conversionRate,
     };
   }, [effectiveLeads, isEmptyState]);
@@ -293,9 +311,12 @@ export const LeadsScreen: React.FC<LeadsScreenProps> = ({
           if (!matchName && !matchPhone && !matchCode && !matchSource) return false;
         }
 
-        // 2. Status Chip Filter
-        if (selectedStatusTab !== 'All' && lead.status !== selectedStatusTab) {
-          return false;
+        // 2. Status Chip Filter (5 clear statuses)
+        if (selectedStatusTab !== 'All') {
+          const normalized = normalizeLeadStatus(lead.status);
+          if (normalized !== selectedStatusTab) {
+            return false;
+          }
         }
 
         // 3. Enquiry Source Filter
@@ -618,60 +639,36 @@ export const LeadsScreen: React.FC<LeadsScreenProps> = ({
       </div>
 
       {/* ============================================================== */}
-      {/* C. FOUR COMPACT SUMMARY CARDS                                  */}
+      {/* C. THREE SPACIOUS SUMMARY CARDS (No truncation or crowding)    */}
       {/* ============================================================== */}
-      <div className="mt-2.5 grid grid-cols-4 gap-1.5 sm:gap-2">
+      <div className="mt-2.5 grid grid-cols-3 gap-2 sm:gap-2.5">
         {/* 1. Total Leads (Soft Blue) */}
         <div
           onClick={() => {
             setSelectedStatusTab('All');
             setFollowUpDueFilter('All');
           }}
-          className="bg-[#EEF5FF] border border-[#DBEAFE] rounded-xl sm:rounded-2xl p-2 sm:p-2.5 flex flex-col justify-between shadow-2xs cursor-pointer hover:border-[#BFDBFE] transition-colors"
+          className="bg-[#EEF5FF] border border-[#DBEAFE] rounded-xl sm:rounded-2xl p-2.5 sm:p-3 flex flex-col justify-between shadow-2xs cursor-pointer hover:border-[#BFDBFE] transition-colors"
         >
-          <div className="w-6.5 h-6.5 sm:w-7.5 sm:h-7.5 rounded-lg bg-[#DBEAFE] text-[#2563EB] flex items-center justify-center shrink-0">
-            <Users className="w-3.5 h-3.5 stroke-[2.2]" />
-          </div>
-          <div className="mt-1.5">
-            <span className="text-[#4B5563] text-[9.5px] sm:text-[10.5px] font-medium block leading-tight truncate">
+          <div className="flex items-center justify-between">
+            <span className="text-[#4B5563] text-[11px] sm:text-[11.5px] font-medium leading-tight">
               Total Leads
             </span>
-            <div className="text-[18px] sm:text-[21px] font-bold text-[#191919] tracking-tight leading-none mt-0.5">
-              {summaryStats.totalLeads}
+            <div className="w-6 h-6 rounded-lg bg-[#DBEAFE] text-[#2563EB] flex items-center justify-center shrink-0">
+              <Users className="w-3.5 h-3.5 stroke-[2.2]" />
             </div>
           </div>
-          <span className="text-[9px] sm:text-[10px] text-[#2563EB] font-medium mt-1 block leading-none truncate">
+          <div className="text-[20px] sm:text-[22px] font-bold text-[#191919] tracking-tight leading-none mt-1.5">
+            {summaryStats.totalLeads}
+          </div>
+          <span className="text-[10px] sm:text-[10.5px] text-[#2563EB] font-medium mt-1.5 block leading-none">
             {summaryStats.thisMonthCount > 0
               ? `+${summaryStats.thisMonthCount} this month`
-              : 'No leads yet'}
+              : 'All enquiries'}
           </span>
         </div>
 
-        {/* 2. New Leads (Soft Cream/Amber) */}
-        <div
-          onClick={() => {
-            setSelectedStatusTab(selectedStatusTab === 'New' ? 'All' : 'New');
-            setFollowUpDueFilter('All');
-          }}
-          className="bg-[#FFF8EB] border border-[#F7E3B5] rounded-xl sm:rounded-2xl p-2 sm:p-2.5 flex flex-col justify-between shadow-2xs cursor-pointer hover:border-[#F2D08B] transition-colors"
-        >
-          <div className="w-6.5 h-6.5 sm:w-7.5 sm:h-7.5 rounded-lg bg-[#FCE8B2] text-[#D97706] flex items-center justify-center shrink-0">
-            <FilePlus2 className="w-3.5 h-3.5 stroke-[2.2]" />
-          </div>
-          <div className="mt-1.5">
-            <span className="text-[#4B5563] text-[9.5px] sm:text-[10.5px] font-medium block leading-tight truncate">
-              New Leads
-            </span>
-            <div className="text-[18px] sm:text-[21px] font-bold text-[#191919] tracking-tight leading-none mt-0.5">
-              {summaryStats.newLeads}
-            </div>
-          </div>
-          <span className="text-[9px] sm:text-[10px] text-[#D97706] font-medium mt-1 block leading-none truncate">
-            This month
-          </span>
-        </div>
-
-        {/* 3. Follow-Ups Due (Soft Rose/Red) */}
+        {/* 2. Follow-Ups Due (Soft Amber/Red) */}
         <div
           onClick={() => {
             setFollowUpDueFilter(
@@ -679,64 +676,63 @@ export const LeadsScreen: React.FC<LeadsScreenProps> = ({
             );
             setSelectedStatusTab('All');
           }}
-          className="bg-[#FDF2F2] border border-[#FADBD8] rounded-xl sm:rounded-2xl p-2 sm:p-2.5 flex flex-col justify-between shadow-2xs cursor-pointer hover:border-[#F5B7B1] transition-colors"
+          className="bg-[#FFFBEB] border border-[#FDE68A] rounded-xl sm:rounded-2xl p-2.5 sm:p-3 flex flex-col justify-between shadow-2xs cursor-pointer hover:border-[#FCD34D] transition-colors"
         >
-          <div className="w-6.5 h-6.5 sm:w-7.5 sm:h-7.5 rounded-lg bg-[#FDE0E0] text-[#DC2626] flex items-center justify-center shrink-0">
-            <Clock className="w-3.5 h-3.5 stroke-[2.2]" />
-          </div>
-          <div className="mt-1.5">
-            <span className="text-[#4B5563] text-[9.5px] sm:text-[10.5px] font-medium block leading-tight truncate">
+          <div className="flex items-center justify-between">
+            <span className="text-[#4B5563] text-[11px] sm:text-[11.5px] font-medium leading-tight">
               Follow-Ups Due
             </span>
-            <div className="text-[18px] sm:text-[21px] font-bold text-[#191919] tracking-tight leading-none mt-0.5">
-              {summaryStats.followUpsDue}
+            <div className="w-6 h-6 rounded-lg bg-[#FEF3C7] text-[#D97706] flex items-center justify-center shrink-0">
+              <Clock className="w-3.5 h-3.5 stroke-[2.2]" />
             </div>
           </div>
-          <span className="text-[9px] sm:text-[10px] text-[#DC2626] font-medium mt-1 block leading-none truncate">
+          <div className="text-[20px] sm:text-[22px] font-bold text-[#191919] tracking-tight leading-none mt-1.5">
+            {summaryStats.followUpsDue}
+          </div>
+          <span className="text-[10px] sm:text-[10.5px] text-[#D97706] font-medium mt-1.5 block leading-none">
             {summaryStats.overdueCount > 0
               ? `${summaryStats.overdueCount} overdue`
-              : 'Up to date'}
+              : 'Today / Pending'}
           </span>
         </div>
 
-        {/* 4. Converted (Soft Green) */}
+        {/* 3. Joined Members (Soft Green) */}
         <div
           onClick={() => {
-            setSelectedStatusTab(selectedStatusTab === 'Converted' ? 'All' : 'Converted');
+            setSelectedStatusTab(selectedStatusTab === 'Joined' ? 'All' : 'Joined');
             setFollowUpDueFilter('All');
           }}
-          className="bg-[#ECFDF3] border border-[#C6F6D5] rounded-xl sm:rounded-2xl p-2 sm:p-2.5 flex flex-col justify-between shadow-2xs cursor-pointer hover:border-[#9AE6B4] transition-colors"
+          className="bg-[#ECFDF3] border border-[#C6F6D5] rounded-xl sm:rounded-2xl p-2.5 sm:p-3 flex flex-col justify-between shadow-2xs cursor-pointer hover:border-[#9AE6B4] transition-colors"
         >
-          <div className="w-6.5 h-6.5 sm:w-7.5 sm:h-7.5 rounded-lg bg-[#D1FAE5] text-[#16A34A] flex items-center justify-center shrink-0">
-            <CheckCircle2 className="w-3.5 h-3.5 stroke-[2.2]" />
-          </div>
-          <div className="mt-1.5">
-            <span className="text-[#4B5563] text-[9.5px] sm:text-[10.5px] font-medium block leading-tight truncate">
-              Converted
+          <div className="flex items-center justify-between">
+            <span className="text-[#4B5563] text-[11px] sm:text-[11.5px] font-medium leading-tight">
+              Joined
             </span>
-            <div className="text-[18px] sm:text-[21px] font-bold text-[#191919] tracking-tight leading-none mt-0.5">
-              {summaryStats.convertedCount}
+            <div className="w-6 h-6 rounded-lg bg-[#D1FAE5] text-[#16A34A] flex items-center justify-center shrink-0">
+              <CheckCircle2 className="w-3.5 h-3.5 stroke-[2.2]" />
             </div>
           </div>
-          <span className="text-[9px] sm:text-[10px] text-[#16A34A] font-medium mt-1 block leading-none truncate">
-            {summaryStats.conversionRate}% conversion
+          <div className="text-[20px] sm:text-[22px] font-bold text-[#191919] tracking-tight leading-none mt-1.5">
+            {summaryStats.joinedCount}
+          </div>
+          <span className="text-[10px] sm:text-[10.5px] text-[#16A34A] font-medium mt-1.5 block leading-none">
+            {summaryStats.conversionRate}% converted
           </span>
         </div>
       </div>
 
       {/* ============================================================== */}
-      {/* D. STATUS FILTER CHIPS                                         */}
+      {/* D. FIVE CLEAR STATUS FILTER TABS                               */}
       {/* ============================================================== */}
       <div className="mt-3 flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none snap-x">
         {(
           [
             { id: 'All', label: 'All', dotColor: null },
-            { id: 'New', label: 'New', dotColor: null },
-            { id: 'Contacted', label: 'Contacted', dotColor: '#2563EB' },
+            { id: 'New', label: 'New', dotColor: '#10B981' },
+            { id: 'Contacted', label: 'Contacted', dotColor: '#3B82F6' },
             { id: 'Interested', label: 'Interested', dotColor: '#F59E0B' },
-            { id: 'Trial', label: 'Trial', dotColor: '#7C3AED' },
-            { id: 'Converted', label: 'Converted', dotColor: '#16A34A' },
-            { id: 'Lost', label: 'Lost', dotColor: '#6B7280' },
+            { id: 'Joined', label: 'Joined', dotColor: '#16A34A' },
+            { id: 'Not Interested', label: 'Not Interested', dotColor: '#71717A' },
           ] as const
         ).map((tab) => {
           const isSelected = selectedStatusTab === tab.id;
@@ -744,10 +740,10 @@ export const LeadsScreen: React.FC<LeadsScreenProps> = ({
             <button
               type="button"
               key={tab.id}
-              onClick={() => setSelectedStatusTab(tab.id)}
-              className={`flex items-center gap-1.5 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full text-[11px] sm:text-[11.5px] font-semibold whitespace-nowrap transition-all cursor-pointer snap-start ${
+              onClick={() => setSelectedStatusTab(tab.id as UILeadStatusFilter)}
+              className={`flex items-center gap-1.5 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full text-[11.5px] font-semibold whitespace-nowrap transition-all cursor-pointer snap-start ${
                 isSelected
-                  ? 'bg-[#102A71] text-white shadow-2xs'
+                  ? 'bg-[#102A71] text-white shadow-2xs font-bold'
                   : 'bg-white border border-[#EAE5DC] text-[#191919] hover:bg-[#FAF8F5]'
               }`}
             >
@@ -792,7 +788,7 @@ export const LeadsScreen: React.FC<LeadsScreenProps> = ({
             className="flex items-center gap-1.5 px-2.5 py-1 sm:py-1.5 rounded-full bg-white border border-[#EAE5DC] hover:bg-[#FAF8F5] text-[11px] font-semibold text-[#191919] shadow-2xs cursor-pointer"
           >
             <ArrowUpDown className="w-3 h-3 text-[#71717A]" />
-            <span>Sort by: {sortLabel}</span>
+            <span>Sort: {sortLabel}</span>
             <ChevronDown className="w-3 h-3 text-[#71717A]" />
           </button>
 
@@ -828,18 +824,18 @@ export const LeadsScreen: React.FC<LeadsScreenProps> = ({
       </div>
 
       {/* ============================================================== */}
-      {/* F. LEADS LIST ROWS                                             */}
+      {/* F. LEADS LIST ROWS (Spacious, Clear Hierarchy, Functional)     */}
       {/* ============================================================== */}
-      <div className="space-y-2">
+      <div className="space-y-2.5">
         {effectiveLeads.length === 0 ? (
           /* Empty Gym State */
           <div className="bg-white rounded-xl sm:rounded-2xl border border-[#EAE5DC] p-6 text-center shadow-2xs">
             <div className="w-10 h-10 rounded-full bg-[#FAF8F5] text-[#71717A] flex items-center justify-center mx-auto mb-2">
               <UserPlus className="w-5 h-5" />
             </div>
-            <h4 className="text-xs font-bold text-[#191919]">No leads yet</h4>
+            <h4 className="text-xs font-bold text-[#191919]">No leads recorded yet</h4>
             <p className="text-[11px] text-[#71717A] mt-0.5 max-w-xs mx-auto">
-              Add your first walk-in, phone, or social media enquiry to start converting prospective members.
+              Add your first walk-in, phone call, or Instagram enquiry to start converting prospective members.
             </p>
             <button
               type="button"
@@ -859,7 +855,7 @@ export const LeadsScreen: React.FC<LeadsScreenProps> = ({
             <p className="text-[11px] text-[#71717A] mt-0.5 max-w-xs mx-auto">
               {searchQuery
                 ? `No leads match "${searchQuery}". Try searching by name, phone number, or Lead ID.`
-                : 'No leads match your selected status or filters.'}
+                : 'No leads match your selected status or filter criteria.'}
             </p>
             <button
               type="button"
@@ -872,150 +868,254 @@ export const LeadsScreen: React.FC<LeadsScreenProps> = ({
         ) : (
           filteredAndSortedLeads.map((lead) => {
             const cleanPhone = (lead.phone || '').replace(/[^0-9]/g, '');
-            const planPill = getInterestedPlanPillStyle(lead.interestedPlan);
             const hasOverdueFollowUp = isFollowUpOverdue(lead);
+            const isFollowUpDueToday =
+              !hasOverdueFollowUp &&
+              lead.nextFollowUpDate === REFERENCE_TODAY &&
+              !isLeadJoined(lead.status) &&
+              !isLeadNotInterested(lead.status);
             const formattedEnquiry = formatDisplayDate(lead.enquiryDate);
             const formattedFollowUp = lead.nextFollowUpDate
               ? formatDisplayDate(lead.nextFollowUpDate)
               : null;
+            const normStatus = normalizeLeadStatus(lead.status);
+            const isJoined = isLeadJoined(lead.status);
+
+            // Clean status badge formatting
+            let statusBadge = {
+              label: 'New',
+              bg: 'bg-[#ECFDF5]',
+              text: 'text-[#065F46]',
+              dot: 'bg-[#10B981]',
+              border: 'border-[#A7F3D0]',
+            };
+            if (normStatus === 'Contacted') {
+              statusBadge = {
+                label: 'Contacted',
+                bg: 'bg-[#EFF6FF]',
+                text: 'text-[#1E40AF]',
+                dot: 'bg-[#3B82F6]',
+                border: 'border-[#BFDBFE]',
+              };
+            } else if (normStatus === 'Interested') {
+              statusBadge = {
+                label: 'Interested',
+                bg: 'bg-[#FFFBEB]',
+                text: 'text-[#92400E]',
+                dot: 'bg-[#F59E0B]',
+                border: 'border-[#FDE68A]',
+              };
+            } else if (normStatus === 'Joined') {
+              statusBadge = {
+                label: 'Joined',
+                bg: 'bg-[#F0FDF4]',
+                text: 'text-[#166534]',
+                dot: 'bg-[#22C55E]',
+                border: 'border-[#BBF7D0]',
+              };
+            } else if (normStatus === 'Not Interested') {
+              statusBadge = {
+                label: 'Not Interested',
+                bg: 'bg-[#F4F4F5]',
+                text: 'text-[#52525B]',
+                dot: 'bg-[#71717A]',
+                border: 'border-[#E4E4E7]',
+              };
+            }
 
             return (
               <div
                 key={lead.id}
-                onClick={() => {
-                  setSelectedLeadId(lead.id);
-                  setConversionPlan(lead.interestedPlan || 'Monthly Plan');
-                  setIsConfirmingLost(false);
-                  setIsQuickFollowUpOpen(false);
-                }}
-                className="bg-white rounded-xl sm:rounded-2xl border border-[#EAE5DC] p-2.5 sm:p-3 flex items-center justify-between gap-2 shadow-2xs hover:shadow-xs hover:border-[#D5CFC2] transition-all cursor-pointer group"
-                role="button"
-                tabIndex={0}
-                aria-label={`Open lead details for ${lead.name}`}
+                className="bg-white rounded-xl sm:rounded-2xl border border-[#EAE5DC] p-3 sm:p-3.5 shadow-2xs hover:shadow-xs hover:border-[#D5CFC2] transition-all space-y-2.5"
               >
-                {/* Left Column: Avatar + Name + Phone + Source & Date */}
-                <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                  {lead.photoUrl ? (
-                    <img
-                      src={lead.photoUrl}
-                      alt={lead.name}
-                      className="w-10 h-10 sm:w-11 sm:h-11 rounded-full object-cover border border-[#EAE5DC] shrink-0"
-                    />
-                  ) : (
-                    <div
-                      className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full font-bold text-xs sm:text-sm flex items-center justify-center border shrink-0 ${getAvatarColorStyle(
-                        lead.name
-                      )}`}
-                    >
-                      {getInitials(lead.name)}
-                    </div>
-                  )}
-
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5">
-                      <h3 className="font-bold text-[13.5px] sm:text-[14px] text-[#191919] truncate leading-tight group-hover:text-[#102A71] transition-colors">
-                        {lead.name}
-                      </h3>
-                    </div>
-                    <p className="text-[11px] sm:text-[11.5px] text-[#4B5563] font-medium mt-0.5 leading-none truncate">
-                      +91 {lead.phone}
-                    </p>
-                    <p className="text-[10.5px] text-[#71717A] mt-1 leading-none truncate">
-                      {lead.source} · {formattedEnquiry}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Middle Column: Plan Badge + Status Badge + Follow-Up Date */}
-                <div className="border-l border-[#F0ECE3] pl-2 sm:pl-2.5 flex flex-col items-start justify-center shrink-0 min-w-[106px] sm:min-w-[125px]">
-                  {planPill && (
-                    <span
-                      className={`inline-block px-2 py-0.5 rounded-full text-[9.5px] sm:text-[10px] font-bold leading-tight truncate max-w-[118px] ${planPill.className}`}
-                    >
-                      {planPill.label}
-                    </span>
-                  )}
-
-                  {/* Status Pill (or Follow-Up Due alert pill when overdue) */}
-                  <div className="mt-1">
-                    {hasOverdueFollowUp ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] sm:text-[10px] font-bold bg-[#FEE2E2] text-[#DC2626] leading-tight">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#DC2626]" />
-                        <span>Follow-Up Due</span>
-                      </span>
-                    ) : lead.status === 'New' ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] sm:text-[10px] font-bold bg-[#E8F8EE] text-[#15803D] leading-tight">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A]" />
-                        <span>New</span>
-                      </span>
-                    ) : lead.status === 'Interested' ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] sm:text-[10px] font-bold bg-[#FEF3C7] text-[#B45309] leading-tight">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B]" />
-                        <span>Interested</span>
-                      </span>
-                    ) : lead.status === 'Trial' ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] sm:text-[10px] font-bold bg-[#F3E8FF] text-[#7C3AED] leading-tight">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#7C3AED]" />
-                        <span>Trial</span>
-                      </span>
-                    ) : lead.status === 'Converted' ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] sm:text-[10px] font-bold bg-[#E8F8EE] text-[#15803D] leading-tight">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A]" />
-                        <span>Converted</span>
-                      </span>
-                    ) : lead.status === 'Contacted' ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] sm:text-[10px] font-bold bg-[#F3F4F6] text-[#4B5563] leading-tight">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#6B7280]" />
-                        <span>Contacted</span>
-                      </span>
+                {/* Row 1: Avatar + Name + Phone + Status + Call & WhatsApp Actions */}
+                <div className="flex items-start justify-between gap-2">
+                  <div
+                    onClick={() => {
+                      setSelectedLeadId(lead.id);
+                      setConversionPlan(lead.interestedPlan || 'Monthly Plan');
+                      setIsConfirmingLost(false);
+                      setIsQuickFollowUpOpen(false);
+                    }}
+                    className="flex items-center gap-2.5 min-w-0 cursor-pointer flex-1"
+                  >
+                    {lead.photoUrl ? (
+                      <img
+                        src={lead.photoUrl}
+                        alt={lead.name}
+                        className="w-10 h-10 rounded-full object-cover border border-[#EAE5DC] shrink-0"
+                      />
                     ) : (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] sm:text-[10px] font-bold bg-[#FEE2E2] text-[#DC2626] leading-tight">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#DC2626]" />
-                        <span>Lost</span>
-                      </span>
+                      <div
+                        className={`w-10 h-10 rounded-full font-bold text-xs sm:text-sm flex items-center justify-center border shrink-0 ${getAvatarColorStyle(
+                          lead.name
+                        )}`}
+                      >
+                        {getInitials(lead.name)}
+                      </div>
+                    )}
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <h3 className="font-bold text-[14px] sm:text-[15px] text-[#191919] truncate leading-tight hover:text-[#102A71] transition-colors">
+                          {lead.name}
+                        </h3>
+                        <span className="text-[10px] font-semibold text-[#71717A] bg-[#F4F1EA] px-1.5 py-0.5 rounded leading-none">
+                          {lead.leadCode}
+                        </span>
+                      </div>
+
+                      {/* Phone number: High contrast, readable */}
+                      <p className="text-[12px] font-semibold text-[#1E3A8A] mt-0.5 leading-tight">
+                        +91 {lead.phone}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Accessible Call & WhatsApp Actions */}
+                  <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
+                    {cleanPhone.length >= 10 && (
+                      <>
+                        <a
+                          href={`tel:${cleanPhone}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-8 h-8 rounded-xl bg-[#EEF5FF] hover:bg-[#DBEAFE] active:scale-95 text-[#2563EB] flex items-center justify-center transition-all shadow-2xs"
+                          aria-label={`Call ${lead.name}`}
+                          title={`Call +91 ${lead.phone}`}
+                        >
+                          <Phone className="w-3.5 h-3.5 fill-current" />
+                        </a>
+
+                        <a
+                          href={`https://wa.me/91${cleanPhone}?text=Hi%20${encodeURIComponent(
+                            lead.name
+                          )},%20thank%20you%20for%20your%20enquiry%20at%20our%20gym!`}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-8 h-8 rounded-xl bg-[#22C55E] hover:bg-[#16A34A] active:scale-95 text-white flex items-center justify-center transition-all shadow-2xs"
+                          aria-label={`WhatsApp ${lead.name}`}
+                          title={`WhatsApp +91 ${lead.phone}`}
+                        >
+                          <MessageCircle className="w-3.5 h-3.5 fill-current" />
+                        </a>
+                      </>
                     )}
                   </div>
-
-                  {/* Next Follow-Up or Joined Date */}
-                  <span className="text-[9.5px] sm:text-[10px] text-[#71717A] mt-1 block leading-none truncate">
-                    {lead.status === 'Converted'
-                      ? `Joined: ${formatDisplayDate(lead.convertedDate || lead.enquiryDate)}`
-                      : formattedFollowUp
-                      ? `Follow up: ${formattedFollowUp}`
-                      : `ID: ${lead.leadCode}`}
-                  </span>
                 </div>
 
-                {/* Right Column: Call + WhatsApp + Chevron */}
-                <div className="border-l border-[#F0ECE3] pl-2 flex items-center gap-1.5 shrink-0">
-                  {cleanPhone.length >= 10 && (
-                    <>
-                      <a
-                        href={`tel:${cleanPhone}`}
-                        onClick={(e) => e.stopPropagation()}
-                        className="w-7.5 h-7.5 sm:w-8 sm:h-8 rounded-full bg-[#EEF5FF] hover:bg-[#DBEAFE] text-[#2563EB] flex items-center justify-center transition-colors"
-                        aria-label={`Call ${lead.name}`}
-                        title={`Call +91 ${lead.phone}`}
-                      >
-                        <Phone className="w-3.5 h-3.5 fill-current" />
-                      </a>
+                {/* Row 2: Status Pill + Interested Plan + Source + Follow-Up Date */}
+                <div className="flex items-center justify-between gap-2 flex-wrap pt-2 border-t border-[#F2EFE8] text-[11px]">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {/* Status Pill */}
+                    <span
+                      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold border ${statusBadge.bg} ${statusBadge.text} ${statusBadge.border}`}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${statusBadge.dot}`} />
+                      <span>{statusBadge.label}</span>
+                    </span>
 
-                      <a
-                        href={`https://wa.me/91${cleanPhone}?text=Hi%20${encodeURIComponent(
-                          lead.name
-                        )},%20thank%20you%20for%20your%20enquiry%20at%20MuscleFit%20Gym!`}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="w-7.5 h-7.5 sm:w-8 sm:h-8 rounded-full bg-[#22C55E] hover:bg-[#16A34A] text-white flex items-center justify-center transition-colors shadow-2xs"
-                        aria-label={`WhatsApp ${lead.name}`}
-                        title={`WhatsApp +91 ${lead.phone}`}
+                    {/* Interested Plan */}
+                    {lead.interestedPlan && (
+                      <span className="px-2 py-0.5 rounded-md bg-[#FAF8F5] border border-[#EAE5DC] text-[10.5px] font-medium text-[#52525B]">
+                        {lead.interestedPlan}
+                      </span>
+                    )}
+
+                    {/* Source */}
+                    <span className="text-[10.5px] text-[#71717A]">
+                      via {lead.source}
+                    </span>
+                  </div>
+
+                  {/* Follow-Up / Joined Date Indicator */}
+                  <div>
+                    {isJoined ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#16A34A]">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Joined: {formatDisplayDate(lead.convertedDate || lead.enquiryDate)}</span>
+                      </span>
+                    ) : hasOverdueFollowUp ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10.5px] font-bold bg-[#FEE2E2] text-[#DC2626]">
+                        <AlertCircle className="w-3 h-3 shrink-0" />
+                        <span>Follow-Up Overdue: {formattedFollowUp}</span>
+                      </span>
+                    ) : isFollowUpDueToday ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10.5px] font-bold bg-[#FEF3C7] text-[#B45309]">
+                        <Clock className="w-3 h-3 shrink-0" />
+                        <span>Due Today: {lead.nextFollowUpTime || '10:00 AM'}</span>
+                      </span>
+                    ) : formattedFollowUp ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10.5px] font-semibold bg-[#EEF2FF] text-[#1E3A8A]">
+                        <Clock className="w-3 h-3 shrink-0" />
+                        <span>Next: {formattedFollowUp}</span>
+                      </span>
+                    ) : (
+                      <span className="text-[10.5px] text-[#71717A]">Enquiry: {formattedEnquiry}</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Row 3: Quick Functional Action Buttons */}
+                <div className="flex items-center justify-between gap-2 pt-2 border-t border-[#F8F6F0]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedLeadId(lead.id);
+                      setConversionPlan(lead.interestedPlan || 'Monthly Plan');
+                      setIsConfirmingLost(false);
+                      setIsQuickFollowUpOpen(false);
+                    }}
+                    className="text-[11.5px] font-semibold text-[#102A71] hover:underline cursor-pointer flex items-center gap-1"
+                  >
+                    <span>View Notes & Details</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+
+                  <div className="flex items-center gap-1.5">
+                    {!isJoined && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedLeadId(lead.id);
+                            setQuickFollowUpDate(lead.nextFollowUpDate || getDaysAheadIso(2));
+                            setQuickFollowUpTime(lead.nextFollowUpTime || '10:00 AM');
+                            setIsQuickFollowUpOpen(true);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-[#FAF8F5] border border-[#EAE5DC] hover:bg-[#F2EFE8] text-[11px] font-bold text-[#191919] cursor-pointer"
+                        >
+                          {formattedFollowUp ? 'Reschedule' : 'Schedule'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedLeadId(lead.id);
+                            setConversionPlan(lead.interestedPlan || 'Monthly Plan');
+                            const res = onConvertLead(lead.id, {
+                              membershipPlan: lead.interestedPlan || 'Monthly Plan',
+                            });
+                            showToast(res.message);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-[#102A71] hover:bg-[#0D225D] text-white text-[11px] font-bold cursor-pointer shadow-2xs"
+                        >
+                          Mark Joined
+                        </button>
+                      </>
+                    )}
+                    {isJoined && lead.convertedMemberId && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const mId = lead.convertedMemberId!;
+                          setViewingMemberId(mId);
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-[#E8F8EE] border border-[#BBF7D0] text-[#15803D] text-[11px] font-bold cursor-pointer"
                       >
-                        <MessageCircle className="w-3.5 h-3.5 fill-current" />
-                      </a>
-                    </>
-                  )}
-                  <ChevronRight className="w-3.5 h-3.5 text-[#9CA3AF] group-hover:text-[#191919] shrink-0" />
+                        View Member
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             );
@@ -1205,18 +1305,18 @@ export const LeadsScreen: React.FC<LeadsScreenProps> = ({
               </div>
             )}
 
-            {/* Mark as Lost Confirmation */}
+            {/* Mark as Not Interested Confirmation */}
             {isConfirmingLost && (
               <div className="mt-3 p-3 rounded-xl bg-[#FEF2F2] border border-[#FECACA] space-y-2">
                 <span className="text-xs font-bold text-[#DC2626] block">
-                  Mark {selectedLead.name} as Lost?
+                  Mark {selectedLead.name} as Not Interested?
                 </span>
                 <input
                   type="text"
                   value={lostReasonInput}
                   onChange={(e) => setLostReasonInput(e.target.value)}
-                  placeholder="Reason (e.g., Joined another gym, Price issue)"
-                  className="w-full px-2.5 py-1.5 text-xs bg-white border border-[#EAE5DC] rounded-lg"
+                  placeholder="Reason (e.g., Joined another gym, Price issue, Moved away)"
+                  className="w-full px-2.5 py-1.5 text-xs bg-white border border-[#EAE5DC] rounded-lg text-[#191919]"
                 />
                 <div className="flex items-center justify-end gap-2">
                   <button
@@ -1230,32 +1330,32 @@ export const LeadsScreen: React.FC<LeadsScreenProps> = ({
                     type="button"
                     onClick={() => {
                       onUpdateLead(selectedLead.id, {
-                        status: 'Lost',
+                        status: 'Not Interested',
                         lostReason: lostReasonInput.trim() || 'Not interested currently',
                         nextFollowUpDate: undefined,
                       });
                       setIsConfirmingLost(false);
-                      showToast(`Marked ${selectedLead.name} as Lost`);
+                      showToast(`Marked ${selectedLead.name} as Not Interested`);
                     }}
                     className="px-3 py-1 rounded-lg bg-[#DC2626] text-white text-xs font-bold cursor-pointer"
                   >
-                    Confirm Lost
+                    Confirm Not Interested
                   </button>
                 </div>
               </div>
             )}
 
             {/* Convert Lead to Member Section */}
-            {selectedLead.status === 'Converted' ? (
+            {isLeadJoined(selectedLead.status) ? (
               <div className="mt-3 p-3 rounded-xl bg-[#ECFDF3] border border-[#C6F6D5] flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <UserCheck className="w-4 h-4 text-[#16A34A] shrink-0" />
                   <div>
                     <span className="text-xs font-bold text-[#15803D] block">
-                      Converted to Gym Member
+                      Joined as Gym Member
                     </span>
                     <span className="text-[10.5px] text-[#16A34A]">
-                      Joined on {formatDisplayDate(selectedLead.convertedDate)}
+                      Joined on {formatDisplayDate(selectedLead.convertedDate || selectedLead.enquiryDate)}
                     </span>
                   </div>
                 </div>
@@ -1304,7 +1404,7 @@ export const LeadsScreen: React.FC<LeadsScreenProps> = ({
                     }}
                     className="px-3.5 py-1.5 rounded-xl bg-[#16A34A] hover:bg-[#15803D] text-white text-xs font-bold cursor-pointer shrink-0 shadow-2xs"
                   >
-                    Convert Now
+                    Mark Joined
                   </button>
                 </div>
               </div>
@@ -1338,14 +1438,14 @@ export const LeadsScreen: React.FC<LeadsScreenProps> = ({
                 <span>Edit Lead</span>
               </button>
 
-              {selectedLead.status !== 'Converted' && selectedLead.status !== 'Lost' ? (
+              {!isLeadJoined(selectedLead.status) && !isLeadNotInterested(selectedLead.status) ? (
                 <button
                   type="button"
                   onClick={() => setIsConfirmingLost(true)}
                   className="py-2 px-2.5 rounded-xl bg-[#FEF2F2] border border-[#FECACA] hover:bg-[#FEE2E2] text-[11.5px] font-bold text-[#DC2626] flex items-center justify-center gap-1 cursor-pointer"
                 >
                   <XCircle className="w-3.5 h-3.5" />
-                  <span>Mark Lost</span>
+                  <span>Not Interested</span>
                 </button>
               ) : (
                 <button

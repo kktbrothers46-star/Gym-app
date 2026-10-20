@@ -892,9 +892,15 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
                 This will appear in your workspace and reports.
               </p>
 
-              {/* Exact 3D Boutique Gym Building Illustration */}
+              {/* Uploaded Gym Building Image */}
               <div className="w-full max-w-[360px] my-2 sm:my-3.5 flex items-center justify-center">
-                <GymBuildingIllustration className="w-full" />
+                <img
+                  src="/images/Screenshot_2026_1019_170605.jpg"
+                  alt="What is your gym called"
+                  className="w-full h-auto max-h-[220px] object-contain select-none"
+                  style={{ objectFit: 'contain' }}
+                  referrerPolicy="no-referrer"
+                />
               </div>
 
               {/* Outlined Gym-Name Input */}
