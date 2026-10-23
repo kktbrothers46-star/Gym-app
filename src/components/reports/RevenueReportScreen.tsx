@@ -194,7 +194,7 @@ export const RevenueReportScreen: React.FC<RevenueReportScreenProps> = ({
   const periodPayments = useMemo(() => {
     return effectivePayments
       .filter((p) => {
-        if (p.status === 'refunded' || p.amount <= 0) return false;
+        if (p.status === 'refunded' || p.status === 'pending' || p.status === 'overdue' || p.amount <= 0) return false;
         return p.date >= bounds.startDate && p.date <= bounds.endDate;
       })
       .sort((a, b) => b.date.localeCompare(a.date));
@@ -203,7 +203,7 @@ export const RevenueReportScreen: React.FC<RevenueReportScreenProps> = ({
   // Previous equivalent period payments for honest comparison
   const prevPeriodPayments = useMemo(() => {
     return effectivePayments.filter((p) => {
-      if (p.status === 'refunded' || p.amount <= 0) return false;
+      if (p.status === 'refunded' || p.status === 'pending' || p.status === 'overdue' || p.amount <= 0) return false;
       return p.date >= bounds.prevStartDate && p.date <= bounds.prevEndDate;
     });
   }, [effectivePayments, bounds]);

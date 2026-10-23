@@ -73,7 +73,7 @@ export const RecentActivitySection: React.FC<RecentActivityProps> = ({
                 </div>
 
                 {/* Details */}
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <div className="text-[12px] font-semibold text-[#191919] truncate leading-tight">
                     {act.title}
                   </div>

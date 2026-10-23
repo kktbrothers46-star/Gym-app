@@ -45,6 +45,12 @@ interface OnboardingScreenProps {
   plans: MembershipPlan[];
   onboarding: OnboardingPreferences;
   isEmptyState: boolean;
+  initialStep?: StepId;
+  onRoleSelectedOwner?: () => void;
+  membersCount?: number;
+  plansCount?: number;
+  paymentsCount?: number;
+  attendanceCount?: number;
   onSaveProgress: (partial: Partial<OnboardingPreferences>) => void;
   onCompleteOnboarding: (
     payload: {
@@ -161,12 +167,19 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
   gym,
   settings,
   onboarding,
+  initialStep,
+  onRoleSelectedOwner,
+  membersCount = 0,
+  plansCount = 0,
+  paymentsCount = 0,
+  attendanceCount = 0,
   onSaveProgress,
   onCompleteOnboarding,
   onBackToSplash,
 }) => {
-  // Resume from saved step if onboarding was in progress, otherwise start at 'welcome'
+  // Resume from saved step or initialStep if provided
   const [step, setStep] = useState<StepId>(() => {
+    if (initialStep) return initialStep;
     if (onboarding?.currentStep && !onboarding.hasCompletedOnboarding) {
       return onboarding.currentStep;
     }
@@ -354,7 +367,11 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
         if (selectedRole === 'member') {
           navigateToStep('member_coming_soon', 'forward');
         } else {
-          navigateToStep('gym_name', 'forward');
+          if (onRoleSelectedOwner) {
+            onRoleSelectedOwner();
+          } else {
+            navigateToStep('gym_name', 'forward');
+          }
         }
         break;
       case 'member_coming_soon':
@@ -1911,7 +1928,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
                 with Gym Business OS.
               </p>
 
-              {/* Optional Setup Checklist */}
+              {/* Setup Checklist (Reflects real saved data) */}
               <div className="w-full space-y-2 mt-4 text-left">
                 {[
                   {
@@ -1919,24 +1936,28 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
                     label: 'Add your first member',
                     icon: UserPlus,
                     iconColor: 'text-[#1E3A8A] bg-[#EEF2FF]',
+                    isDone: membersCount > 0,
                   },
                   {
                     id: 'plans' as OnboardingChecklistAction,
                     label: 'Create membership plans',
                     icon: Calendar,
                     iconColor: 'text-[#16A34A] bg-[#DCFCE7]',
+                    isDone: plansCount > 0,
                   },
                   {
                     id: 'record_payment' as OnboardingChecklistAction,
                     label: 'Record your first payment',
                     icon: CreditCard,
                     iconColor: 'text-[#1E3A8A] bg-[#EEF2FF]',
+                    isDone: paymentsCount > 0,
                   },
                   {
                     id: 'attendance' as OnboardingChecklistAction,
                     label: 'Set up attendance',
                     icon: CheckCircle2,
                     iconColor: 'text-[#16A34A] bg-[#DCFCE7]',
+                    isDone: attendanceCount > 0,
                   },
                 ].map((item) => {
                   const Icon = item.icon;
@@ -1945,11 +1966,17 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
                       key={item.id}
                       type="button"
                       onClick={() => handleCompleteAndOpenDashboard(item.id)}
-                      className="w-full rounded-xl bg-white border border-[#E5E7EB] hover:border-[#2563EB] px-3.5 py-2.5 flex items-center justify-between transition-all shadow-2xs cursor-pointer"
+                      className={`w-full rounded-xl bg-white border px-3.5 py-2.5 flex items-center justify-between transition-all shadow-2xs cursor-pointer ${
+                        item.isDone
+                          ? 'border-[#86EFAC] bg-[#F0FDF4]/50'
+                          : 'border-[#E5E7EB] hover:border-[#2563EB]'
+                      }`}
                     >
                       <div className="flex items-center gap-3">
                         <div
-                          className={`w-7 h-7 rounded-lg ${item.iconColor} flex items-center justify-center shrink-0`}
+                          className={`w-7 h-7 rounded-lg ${
+                            item.isDone ? 'bg-[#DCFCE7] text-[#16A34A]' : item.iconColor
+                          } flex items-center justify-center shrink-0`}
                         >
                           <Icon className="w-4 h-4" />
                         </div>
@@ -1957,7 +1984,14 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
                           {item.label}
                         </span>
                       </div>
-                      <ChevronRight className="w-4 h-4 text-[#6B7280]" />
+                      {item.isDone ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#16A34A] bg-[#DCFCE7] px-2 py-0.5 rounded-full">
+                          <Check className="w-3 h-3 stroke-[3]" />
+                          <span>Done</span>
+                        </span>
+                      ) : (
+                        <ChevronRight className="w-4 h-4 text-[#6B7280]" />
+                      )}
                     </button>
                   );
                 })}

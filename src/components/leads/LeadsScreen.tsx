@@ -37,6 +37,10 @@ import {
   FollowUpReason,
 } from '../../types/dashboard';
 import { MemberDetailView } from '../members/MemberDetailView';
+import {
+  WhatsAppFollowUpModal,
+  WhatsAppFollowUpTarget,
+} from '../modals/WhatsAppFollowUpModal';
 
 interface LeadsScreenProps {
   leads: Lead[];
@@ -240,6 +244,7 @@ export const LeadsScreen: React.FC<LeadsScreenProps> = ({
 
   // Viewing converted member profile
   const [viewingMemberId, setViewingMemberId] = useState<string | null>(null);
+  const [whatsAppTarget, setWhatsAppTarget] = useState<WhatsAppFollowUpTarget | null>(null);
 
   const effectiveLeads = useMemo(() => (isEmptyState ? [] : leads), [leads, isEmptyState]);
   const effectiveMembers = useMemo(() => (isEmptyState ? [] : members), [members, isEmptyState]);
@@ -986,19 +991,25 @@ export const LeadsScreen: React.FC<LeadsScreenProps> = ({
                           <Phone className="w-3.5 h-3.5 fill-current" />
                         </a>
 
-                        <a
-                          href={`https://wa.me/91${cleanPhone}?text=Hi%20${encodeURIComponent(
-                            lead.name
-                          )},%20thank%20you%20for%20your%20enquiry%20at%20our%20gym!`}
-                          target="_blank"
-                          rel="noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="w-8 h-8 rounded-xl bg-[#22C55E] hover:bg-[#16A34A] active:scale-95 text-white flex items-center justify-center transition-all shadow-2xs"
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setWhatsAppTarget({
+                              personType: 'Lead',
+                              personId: lead.id,
+                              name: lead.name,
+                              phone: lead.phone,
+                              defaultCategory: 'lead',
+                              planName: lead.interestedPlan,
+                            });
+                          }}
+                          className="w-8 h-8 rounded-xl bg-[#22C55E] hover:bg-[#16A34A] active:scale-95 text-white flex items-center justify-center transition-all shadow-2xs cursor-pointer"
                           aria-label={`WhatsApp ${lead.name}`}
                           title={`WhatsApp +91 ${lead.phone}`}
                         >
                           <MessageCircle className="w-3.5 h-3.5 fill-current" />
-                        </a>
+                        </button>
                       </>
                     )}
                   </div>
@@ -1795,6 +1806,26 @@ export const LeadsScreen: React.FC<LeadsScreenProps> = ({
           </div>
         </div>
       )}
+
+      {/* One-Tap WhatsApp Follow-Up Modal */}
+      <WhatsAppFollowUpModal
+        isOpen={Boolean(whatsAppTarget)}
+        target={whatsAppTarget}
+        onClose={() => setWhatsAppTarget(null)}
+        onConfirmSent={(payload) => {
+          const lead = effectiveLeads.find((l) => l.id === payload.personId);
+          if (lead && lead.status === 'New') {
+            onUpdateLead(lead.id, {
+              status: 'Contacted',
+              notes: lead.notes
+                ? `${lead.notes} | WhatsApp follow-up sent`
+                : `WhatsApp follow-up sent: "${payload.messageText.slice(0, 70)}..."`,
+            });
+          }
+          showToast(`Logged WhatsApp follow-up`);
+          setWhatsAppTarget(null);
+        }}
+      />
     </div>
   );
 };

@@ -1,0 +1,201 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isGymOwner(gymId) {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/gyms/$(gymId)) &&
+        get(/databases/$(database)/documents/gyms/$(gymId)).data.ownerId == request.auth.uid;
+    }
+
+    // Connection health check endpoint (read-only)
+    match /test/connection {
+      allow get: if true;
+      allow list, write: if false;
+    }
+
+    // User collection: Private user profiles
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if false;
+      allow create: if isOwner(userId) &&
+                    isValidId(userId) &&
+                    incoming().uid == request.auth.uid;
+      allow update: if isOwner(userId) &&
+                    isValidId(userId) &&
+                    incoming().uid == request.auth.uid;
+      allow delete: if isOwner(userId) && isValidId(userId);
+    }
+
+    // Gym collection: Top-level gym business document
+    match /gyms/{gymId} {
+      allow get: if isSignedIn() && isValidId(gymId) && (resource == null || existing().ownerId == request.auth.uid);
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(gymId) && incoming().ownerId == request.auth.uid;
+      allow update: if isSignedIn() && isValidId(gymId) && existing().ownerId == request.auth.uid && incoming().ownerId == request.auth.uid;
+      allow delete: if isSignedIn() && isValidId(gymId) && existing().ownerId == request.auth.uid;
+
+      // Gym settings document
+      match /settings/{settingId} {
+        allow get: if isSignedIn() && isValidId(gymId) && isValidId(settingId) && (resource == null || existing().ownerId == request.auth.uid || isGymOwner(gymId));
+        allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+        allow create: if isSignedIn() && isValidId(gymId) && isValidId(settingId) && incoming().ownerId == request.auth.uid && isGymOwner(gymId);
+        allow update: if isSignedIn() && isValidId(gymId) && isValidId(settingId) && existing().ownerId == request.auth.uid && incoming().ownerId == request.auth.uid && isGymOwner(gymId);
+        allow delete: if isSignedIn() && isValidId(gymId) && isValidId(settingId) && existing().ownerId == request.auth.uid && isGymOwner(gymId);
+      }
+
+      // Gym onboarding progress
+      match /onboarding/{onboardingId} {
+        allow get: if isSignedIn() && isValidId(gymId) && isValidId(onboardingId) && (resource == null || existing().ownerId == request.auth.uid || isGymOwner(gymId));
+        allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+        allow create: if isSignedIn() && isValidId(gymId) && isValidId(onboardingId) && incoming().ownerId == request.auth.uid && isGymOwner(gymId);
+        allow update: if isSignedIn() && isValidId(gymId) && isValidId(onboardingId) && existing().ownerId == request.auth.uid && incoming().ownerId == request.auth.uid && isGymOwner(gymId);
+        allow delete: if isSignedIn() && isValidId(gymId) && isValidId(onboardingId) && existing().ownerId == request.auth.uid && isGymOwner(gymId);
+      }
+
+      // Gym members subcollection
+      match /members/{memberId} {
+        allow get: if isSignedIn() && isValidId(gymId) && isValidId(memberId) && (resource == null || existing().ownerId == request.auth.uid || isGymOwner(gymId));
+        allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+        allow create: if isSignedIn() && isValidId(gymId) && isValidId(memberId) && incoming().ownerId == request.auth.uid && isGymOwner(gymId);
+        allow update: if isSignedIn() && isValidId(gymId) && isValidId(memberId) && existing().ownerId == request.auth.uid && incoming().ownerId == request.auth.uid && isGymOwner(gymId);
+        allow delete: if isSignedIn() && isValidId(gymId) && isValidId(memberId) && existing().ownerId == request.auth.uid && isGymOwner(gymId);
+      }
+
+      // Membership plans
+      match /plans/{planId} {
+        allow get: if isSignedIn() && isValidId(gymId) && isValidId(planId) && (resource == null || existing().ownerId == request.auth.uid || isGymOwner(gymId));
+        allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+        allow create: if isSignedIn() && isValidId(gymId) && isValidId(planId) && incoming().ownerId == request.auth.uid && isGymOwner(gymId);
+        allow update: if isSignedIn() && isValidId(gymId) && isValidId(planId) && existing().ownerId == request.auth.uid && incoming().ownerId == request.auth.uid && isGymOwner(gymId);
+        allow delete: if isSignedIn() && isValidId(gymId) && isValidId(planId) && existing().ownerId == request.auth.uid && isGymOwner(gymId);
+      }
+
+      // Payments
+      match /payments/{paymentId} {
+        allow get: if isSignedIn() && isValidId(gymId) && isValidId(paymentId) && (resource == null || existing().ownerId == request.auth.uid || isGymOwner(gymId));
+        allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+        allow create: if isSignedIn() && isValidId(gymId) && isValidId(paymentId) && incoming().ownerId == request.auth.uid && isGymOwner(gymId);
+        allow update: if isSignedIn() && isValidId(gymId) && isValidId(paymentId) && existing().ownerId == request.auth.uid && incoming().ownerId == request.auth.uid && isGymOwner(gymId);
+        allow delete: if isSignedIn() && isValidId(gymId) && isValidId(paymentId) && existing().ownerId == request.auth.uid && isGymOwner(gymId);
+      }
+
+      // Membership renewals
+      match /renewals/{renewalId} {
+        allow get: if isSignedIn() && isValidId(gymId) && isValidId(renewalId) && (resource == null || existing().ownerId == request.auth.uid || isGymOwner(gymId));
+        allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+        allow create: if isSignedIn() && isValidId(gymId) && isValidId(renewalId) && incoming().ownerId == request.auth.uid && isGymOwner(gymId);
+        allow update: if isSignedIn() && isValidId(gymId) && isValidId(renewalId) && existing().ownerId == request.auth.uid && incoming().ownerId == request.auth.uid && isGymOwner(gymId);
+        allow delete: if isSignedIn() && isValidId(gymId) && isValidId(renewalId) && existing().ownerId == request.auth.uid && isGymOwner(gymId);
+      }
+
+      // Operating Expenses
+      match /expenses/{expenseId} {
+        allow get: if isSignedIn() && isValidId(gymId) && isValidId(expenseId) && (resource == null || existing().ownerId == request.auth.uid || isGymOwner(gymId));
+        allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+        allow create: if isSignedIn() && isValidId(gymId) && isValidId(expenseId) && incoming().ownerId == request.auth.uid && isGymOwner(gymId);
+        allow update: if isSignedIn() && isValidId(gymId) && isValidId(expenseId) && existing().ownerId == request.auth.uid && incoming().ownerId == request.auth.uid && isGymOwner(gymId);
+        allow delete: if isSignedIn() && isValidId(gymId) && isValidId(expenseId) && existing().ownerId == request.auth.uid && isGymOwner(gymId);
+      }
+
+      // Attendance records
+      match /attendance/{attendanceId} {
+        allow get: if isSignedIn() && isValidId(gymId) && isValidId(attendanceId) && (resource == null || existing().ownerId == request.auth.uid || isGymOwner(gymId));
+        allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+        allow create: if isSignedIn() && isValidId(gymId) && isValidId(attendanceId) && incoming().ownerId == request.auth.uid && isGymOwner(gymId);
+        allow update: if isSignedIn() && isValidId(gymId) && isValidId(attendanceId) && existing().ownerId == request.auth.uid && incoming().ownerId == request.auth.uid && isGymOwner(gymId);
+        allow delete: if isSignedIn() && isValidId(gymId) && isValidId(attendanceId) && existing().ownerId == request.auth.uid && isGymOwner(gymId);
+      }
+
+      // Prospective leads
+      match /leads/{leadId} {
+        allow get: if isSignedIn() && isValidId(gymId) && isValidId(leadId) && (resource == null || existing().ownerId == request.auth.uid || isGymOwner(gymId));
+        allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+        allow create: if isSignedIn() && isValidId(gymId) && isValidId(leadId) && incoming().ownerId == request.auth.uid && isGymOwner(gymId);
+        allow update: if isSignedIn() && isValidId(gymId) && isValidId(leadId) && existing().ownerId == request.auth.uid && incoming().ownerId == request.auth.uid && isGymOwner(gymId);
+        allow delete: if isSignedIn() && isValidId(gymId) && isValidId(leadId) && existing().ownerId == request.auth.uid && isGymOwner(gymId);
+      }
+
+      // Follow-up tasks
+      match /followUpTasks/{taskId} {
+        allow get: if isSignedIn() && isValidId(gymId) && isValidId(taskId) && (resource == null || existing().ownerId == request.auth.uid || isGymOwner(gymId));
+        allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+        allow create: if isSignedIn() && isValidId(gymId) && isValidId(taskId) && incoming().ownerId == request.auth.uid && isGymOwner(gymId);
+        allow update: if isSignedIn() && isValidId(gymId) && isValidId(taskId) && existing().ownerId == request.auth.uid && incoming().ownerId == request.auth.uid && isGymOwner(gymId);
+        allow delete: if isSignedIn() && isValidId(gymId) && isValidId(taskId) && existing().ownerId == request.auth.uid && isGymOwner(gymId);
+      }
+
+      // Staff members
+      match /staff/{staffId} {
+        allow get: if isSignedIn() && isValidId(gymId) && isValidId(staffId) && (resource == null || existing().ownerId == request.auth.uid || isGymOwner(gymId));
+        allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+        allow create: if isSignedIn() && isValidId(gymId) && isValidId(staffId) && incoming().ownerId == request.auth.uid && isGymOwner(gymId);
+        allow update: if isSignedIn() && isValidId(gymId) && isValidId(staffId) && existing().ownerId == request.auth.uid && incoming().ownerId == request.auth.uid && isGymOwner(gymId);
+        allow delete: if isSignedIn() && isValidId(gymId) && isValidId(staffId) && existing().ownerId == request.auth.uid && isGymOwner(gymId);
+      }
+
+      // Complaints & maintenance tickets
+      match /complaints/{complaintId} {
+        allow get: if isSignedIn() && isValidId(gymId) && isValidId(complaintId) && (resource == null || existing().ownerId == request.auth.uid || isGymOwner(gymId));
+        allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+        allow create: if isSignedIn() && isValidId(gymId) && isValidId(complaintId) && incoming().ownerId == request.auth.uid && isGymOwner(gymId);
+        allow update: if isSignedIn() && isValidId(gymId) && isValidId(complaintId) && existing().ownerId == request.auth.uid && incoming().ownerId == request.auth.uid && isGymOwner(gymId);
+        allow delete: if isSignedIn() && isValidId(gymId) && isValidId(complaintId) && existing().ownerId == request.auth.uid && isGymOwner(gymId);
+      }
+
+      // Gym in-app notifications
+      match /notifications/{notificationId} {
+        allow get: if isSignedIn() && isValidId(gymId) && isValidId(notificationId) && (resource == null || existing().ownerId == request.auth.uid || isGymOwner(gymId));
+        allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+        allow create: if isSignedIn() && isValidId(gymId) && isValidId(notificationId) && incoming().ownerId == request.auth.uid && isGymOwner(gymId);
+        allow update: if isSignedIn() && isValidId(gymId) && isValidId(notificationId) && existing().ownerId == request.auth.uid && incoming().ownerId == request.auth.uid && isGymOwner(gymId);
+        allow delete: if isSignedIn() && isValidId(gymId) && isValidId(notificationId) && existing().ownerId == request.auth.uid && isGymOwner(gymId);
+      }
+
+      // Payment promises
+      match /paymentPromises/{promiseId} {
+        allow get: if isSignedIn() && isValidId(gymId) && isValidId(promiseId) && (resource == null || existing().ownerId == request.auth.uid || isGymOwner(gymId));
+        allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+        allow create: if isSignedIn() && isValidId(gymId) && isValidId(promiseId) && incoming().ownerId == request.auth.uid && isGymOwner(gymId);
+        allow update: if isSignedIn() && isValidId(gymId) && isValidId(promiseId) && existing().ownerId == request.auth.uid && incoming().ownerId == request.auth.uid && isGymOwner(gymId);
+        allow delete: if isSignedIn() && isValidId(gymId) && isValidId(promiseId) && existing().ownerId == request.auth.uid && isGymOwner(gymId);
+      }
+
+      // Daily cash reconciliations
+      match /cashReconciliations/{reconciliationId} {
+        allow get: if isSignedIn() && isValidId(gymId) && isValidId(reconciliationId) && (resource == null || existing().ownerId == request.auth.uid || isGymOwner(gymId));
+        allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+        allow create: if isSignedIn() && isValidId(gymId) && isValidId(reconciliationId) && incoming().ownerId == request.auth.uid && isGymOwner(gymId);
+        allow update: if isSignedIn() && isValidId(gymId) && isValidId(reconciliationId) && existing().ownerId == request.auth.uid && incoming().ownerId == request.auth.uid && isGymOwner(gymId);
+        allow delete: if isSignedIn() && isValidId(gymId) && isValidId(reconciliationId) && existing().ownerId == request.auth.uid && isGymOwner(gymId);
+      }
+    }
+  }
+}
+

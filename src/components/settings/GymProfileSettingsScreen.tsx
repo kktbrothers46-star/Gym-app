@@ -29,6 +29,7 @@ import {
   Sparkles,
   X,
   Lock,
+  LogOut,
 } from 'lucide-react';
 import {
   GymProfile,
@@ -38,6 +39,7 @@ import {
   StaffMember,
 } from '../../types/dashboard';
 import { ReportTabType } from '../reports/RetentionReportScreen';
+import { LegalModal } from '../modals/LegalModal';
 
 interface GymProfileSettingsScreenProps {
   gym: GymProfile;
@@ -46,6 +48,8 @@ interface GymProfileSettingsScreenProps {
   plans: MembershipPlan[];
   staff: StaffMember[];
   unreadNotificationsCount: number;
+  userEmail?: string | null;
+  onLogout?: () => void;
   onBack: () => void;
   onSelectReportTab?: (tab: ReportTabType) => void;
   onUpdateGymProfile: (updates: Partial<GymProfile>) => void;
@@ -63,6 +67,8 @@ export const GymProfileSettingsScreen: React.FC<GymProfileSettingsScreenProps> =
   plans,
   staff,
   unreadNotificationsCount,
+  userEmail,
+  onLogout,
   onBack,
   onSelectReportTab,
   onUpdateGymProfile,
@@ -74,6 +80,11 @@ export const GymProfileSettingsScreen: React.FC<GymProfileSettingsScreenProps> =
 }) => {
   const [viewerRole, setViewerRole] = useState<'owner' | 'reception'>('owner');
   const isReadOnly = viewerRole !== 'owner';
+
+  // Legal Modal
+  const [legalModalTab, setLegalModalTab] = useState<'terms' | 'privacy'>('terms');
+  const [isLegalModalOpen, setIsLegalModalOpen] = useState(false);
+  const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
 
   // Local draft state for settings so user can either auto-save or click Save Changes with feedback
   const [draftSettings, setDraftSettings] = useState<GymSettings>(settings);
@@ -1193,7 +1204,69 @@ export const GymProfileSettingsScreen: React.FC<GymProfileSettingsScreenProps> =
         </div>
       </div>
 
-      {/* 8. SAVE CHANGES & DATA EXPORT ACTIONS */}
+      {/* 8. ACCOUNT, SECURITY & LEGAL */}
+      <div className="bg-white rounded-2xl p-3.5 border border-[#EAE5DC] shadow-2xs space-y-3">
+        <h3 className="text-[13.5px] font-bold text-[#191919]">
+          Owner Account & Security
+        </h3>
+        
+        <div className="p-3 bg-[#FAF8F5] rounded-xl border border-[#EAE5DC] space-y-1.5">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold text-[#71717A]">Owner Profile</span>
+            <span className="text-[11px] font-bold text-[#102A71] bg-[#EFF6FF] px-2 py-0.5 rounded-full">
+              Authenticated Owner
+            </span>
+          </div>
+          <div className="text-[13px] font-bold text-[#191919]">{gym.ownerName}</div>
+          <div className="text-[11.5px] text-[#52525B]">
+            {userEmail || gym.email || 'Registered via Gym Business OS'}
+          </div>
+          <div className="text-[10px] text-[#A1A1AA] pt-1">
+            Gym ID: <code className="font-mono">{gym.id}</code> • Branch: {gym.branchCode}
+          </div>
+        </div>
+
+        {/* Legal & Compliance Links */}
+        <div className="grid grid-cols-2 gap-2 pt-1">
+          <button
+            type="button"
+            onClick={() => {
+              setLegalModalTab('terms');
+              setIsLegalModalOpen(true);
+            }}
+            className="py-2 px-3 rounded-xl bg-[#FAF8F5] hover:bg-[#F2EFE8] border border-[#E5E0D6] text-[11px] font-bold text-[#191919] flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+          >
+            <FileText className="w-3.5 h-3.5 text-[#102A71]" />
+            <span>Terms of Service</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setLegalModalTab('privacy');
+              setIsLegalModalOpen(true);
+            }}
+            className="py-2 px-3 rounded-xl bg-[#FAF8F5] hover:bg-[#F2EFE8] border border-[#E5E0D6] text-[11px] font-bold text-[#191919] flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+          >
+            <Shield className="w-3.5 h-3.5 text-[#102A71]" />
+            <span>Privacy Policy</span>
+          </button>
+        </div>
+
+        {/* Sign Out Button */}
+        {onLogout && (
+          <button
+            type="button"
+            onClick={() => setIsLogoutConfirmOpen(true)}
+            className="w-full py-2.5 rounded-xl border border-[#FCA5A5] bg-[#FEF2F2] hover:bg-[#FEE2E2] text-[#DC2626] text-[12px] font-bold flex items-center justify-center gap-2 cursor-pointer transition-colors"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Sign Out of Gym Account</span>
+          </button>
+        )}
+      </div>
+
+      {/* 9. SAVE CHANGES & DATA EXPORT ACTIONS */}
       <div className="bg-white rounded-2xl p-3.5 border border-[#EAE5DC] shadow-2xs space-y-2.5">
         <div className="flex items-center justify-between gap-2">
           <button
@@ -1416,6 +1489,51 @@ export const GymProfileSettingsScreen: React.FC<GymProfileSettingsScreenProps> =
           </div>
         </div>
       )}
+
+      {/* LOGOUT CONFIRMATION MODAL */}
+      {isLogoutConfirmOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-5 border border-[#EAE5DC] shadow-2xl space-y-3">
+            <div className="flex items-center gap-2.5 text-[#DC2626]">
+              <div className="w-9 h-9 rounded-xl bg-[#FEF2F2] flex items-center justify-center">
+                <LogOut className="w-5 h-5" />
+              </div>
+              <h3 className="text-[15px] font-bold text-[#191919]">
+                Sign Out of Gym Account
+              </h3>
+            </div>
+            <p className="text-[12px] text-[#52525B] leading-relaxed">
+              Are you sure you want to sign out? Your gym data is securely synced and saved in your account.
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#F4F1EA]">
+              <button
+                type="button"
+                onClick={() => setIsLogoutConfirmOpen(false)}
+                className="px-3 py-2 rounded-xl bg-[#F4F1EA] text-[#52525B] text-[12px] font-bold cursor-pointer hover:bg-[#EAE5DC]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsLogoutConfirmOpen(false);
+                  onLogout?.();
+                }}
+                className="px-4 py-2 rounded-xl bg-[#DC2626] text-white text-[12px] font-bold cursor-pointer hover:bg-[#B91C1C] shadow-xs"
+              >
+                Sign Out
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* LEGAL & POLICIES MODAL */}
+      <LegalModal
+        isOpen={isLegalModalOpen}
+        onClose={() => setIsLegalModalOpen(false)}
+        initialTab={legalModalTab}
+      />
     </div>
   );
 };

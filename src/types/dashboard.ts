@@ -488,6 +488,31 @@ export interface ComplaintRecord {
   history: ComplaintHistoryEntry[];
 }
 
+export interface PaymentPromise {
+  id: string;
+  memberId: string;
+  memberName: string;
+  memberCode?: string;
+  memberPhone?: string;
+  promisedAmount: number;
+  promisedDate: string; // ISO "YYYY-MM-DD"
+  createdAt: string; // ISO "YYYY-MM-DD"
+  status: 'pending' | 'completed' | 'cancelled';
+  completedAt?: string;
+  note?: string;
+  planName?: string;
+}
+
+export interface CashReconciliation {
+  id: string; // e.g. "rec-YYYY-MM-DD"
+  date: string; // ISO "YYYY-MM-DD"
+  recordedCashAmount: number;
+  physicalCashCounted: number;
+  difference: number; // physicalCashCounted - recordedCashAmount
+  note?: string;
+  updatedAt: string;
+}
+
 export interface GymStoreState {
   gym: GymProfile;
   settings: GymSettings;
@@ -497,6 +522,8 @@ export interface GymStoreState {
   plans: MembershipPlan[];
   renewals: RenewalRecord[];
   payments: Payment[];
+  paymentPromises: PaymentPromise[];
+  cashReconciliations: CashReconciliation[];
   expenses: Expense[];
   leads: Lead[];
   followUpTasks: FollowUpTask[];
@@ -519,3 +546,4 @@ export interface GymStoreState {
   expiringSoonCount: number;
   inactiveCount: number;
 }
+

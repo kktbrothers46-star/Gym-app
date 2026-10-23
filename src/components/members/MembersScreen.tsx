@@ -19,14 +19,22 @@ import {
   X,
   ArrowUpDown,
   CheckCircle,
+  Upload,
 } from 'lucide-react';
 import { Member } from '../../types/dashboard';
 import { AdvancedFilterModal, AdvancedFilterOptions } from './AdvancedFilterModal';
 import { MemberDetailView } from './MemberDetailView';
+import {
+  WhatsAppFollowUpModal,
+  WhatsAppFollowUpTarget,
+} from '../modals/WhatsAppFollowUpModal';
 
 interface MembersScreenProps {
   members: Member[];
+  gymName?: string;
+  upiId?: string;
   onOpenAddMember: () => void;
+  onOpenImportMembers?: () => void;
   onRecordPayment: (memberId: string) => void;
   onRenewMembership?: (memberId: string) => void;
   onMarkAttendance: (memberId: string, memberName: string) => void;
@@ -43,7 +51,10 @@ interface MembersScreenProps {
 
 export const MembersScreen: React.FC<MembersScreenProps> = ({
   members,
+  gymName = 'My Gym',
+  upiId,
   onOpenAddMember,
+  onOpenImportMembers,
   onRecordPayment,
   onRenewMembership,
   onMarkAttendance,
@@ -60,6 +71,7 @@ export const MembersScreen: React.FC<MembersScreenProps> = ({
   const [sortBy, setSortBy] = useState<'recent' | 'name' | 'expiry' | 'balance' | 'inactivity'>('recent');
   const [isSortDropdownOpen, setIsSortDropdownOpen] = useState(false);
   const [isAdvancedFilterOpen, setIsAdvancedFilterOpen] = useState(false);
+  const [whatsAppTarget, setWhatsAppTarget] = useState<WhatsAppFollowUpTarget | null>(null);
 
   // Advanced Filters
   const [advancedFilters, setAdvancedFilters] = useState<AdvancedFilterOptions>({
@@ -263,15 +275,29 @@ export const MembersScreen: React.FC<MembersScreenProps> = ({
           </p>
         </div>
 
-        {/* Prominent "+ Add Member" Button */}
-        <button
-          onClick={onOpenAddMember}
-          className="flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-[#102A71] hover:bg-[#0D225D] active:scale-95 text-white text-[12px] font-semibold shadow-2xs transition-all cursor-pointer shrink-0"
-          aria-label="Add Member"
-        >
-          <UserPlus className="w-3.5 h-3.5 stroke-[2.2]" />
-          <span>Add Member</span>
-        </button>
+        {/* Import CSV/Excel & "+ Add Member" Buttons */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {onOpenImportMembers && (
+            <button
+              type="button"
+              onClick={onOpenImportMembers}
+              className="flex items-center gap-1 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl bg-white hover:bg-[#FAF8F5] active:scale-95 border border-[#EAE5DC] text-[#102A71] text-[11.5px] font-bold shadow-2xs transition-all cursor-pointer"
+              title="Import Members from Excel or CSV"
+              aria-label="Import Members from Excel or CSV"
+            >
+              <Upload className="w-3.5 h-3.5 stroke-[2.2]" />
+              <span>Import</span>
+            </button>
+          )}
+          <button
+            onClick={onOpenAddMember}
+            className="flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-[#102A71] hover:bg-[#0D225D] active:scale-95 text-white text-[12px] font-semibold shadow-2xs transition-all cursor-pointer shrink-0"
+            aria-label="Add Member"
+          >
+            <UserPlus className="w-3.5 h-3.5 stroke-[2.2]" />
+            <span>Add Member</span>
+          </button>
+        </div>
       </header>
 
       {/* ============================================================== */}
@@ -508,128 +534,144 @@ export const MembersScreen: React.FC<MembersScreenProps> = ({
               <div
                 key={m.id}
                 onClick={() => handleOpenDetail(m)}
-                className="bg-white rounded-xl sm:rounded-2xl border border-[#EAE5DC] p-2.5 sm:p-3 shadow-2xs hover:shadow-xs hover:border-[#D5CFC2] transition-all cursor-pointer group"
+                className="bg-white rounded-xl sm:rounded-2xl border border-[#EAE5DC] p-3 sm:p-3.5 shadow-2xs hover:shadow-xs hover:border-[#D5CFC2] transition-all cursor-pointer group space-y-2.5"
                 role="button"
                 tabIndex={0}
                 aria-label={`View details for ${m.name}`}
               >
-                {/* Top Row: Avatar, Identity, Status Badge, & Direct Actions */}
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2.5 min-w-0">
+                {/* Top Section: Avatar + Name & ID/Phone (Full width, zero crowding) + Status Badge */}
+                <div className="flex items-start justify-between gap-2.5">
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
                     {/* Circular Avatar Photo */}
                     {m.photoUrl ? (
                       <img
                         src={m.photoUrl}
                         alt={m.name}
-                        className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover shrink-0 border border-[#EAE5DC] shadow-2xs"
+                        className="w-10 h-10 rounded-full object-cover shrink-0 border border-[#EAE5DC] shadow-2xs"
                       />
                     ) : (
-                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#E0E7FF] text-[#102A71] font-bold text-xs sm:text-sm flex items-center justify-center shrink-0 border border-[#C7D2FE]">
+                      <div className="w-10 h-10 rounded-full bg-[#E0E7FF] text-[#102A71] font-bold text-xs sm:text-sm flex items-center justify-center shrink-0 border border-[#C7D2FE]">
                         {m.name.charAt(0)}
                       </div>
                     )}
 
-                    {/* Name & ID / Phone */}
-                    <div className="min-w-0">
-                      <h4 className="font-bold text-[13.5px] sm:text-[14px] text-[#191919] truncate leading-tight group-hover:text-[#102A71] transition-colors">
-                        {m.name}
-                      </h4>
-                      <p className="text-[11px] text-[#71717A] mt-0.5 truncate leading-none font-normal">
-                        ID: {m.memberCode || m.id} &nbsp;•&nbsp; {m.phone}
+                    {/* Member Name & ID/Phone — 100% Fully Visible */}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <h4 className="font-bold text-[14px] sm:text-[15px] text-[#191919] leading-snug group-hover:text-[#102A71] transition-colors break-words">
+                          {m.name}
+                        </h4>
+                        <span className="text-[10px] font-semibold text-[#71717A] bg-[#F4F1EA] px-1.5 py-0.5 rounded leading-none shrink-0">
+                          {m.memberCode || m.id}
+                        </span>
+                      </div>
+                      <p className="text-[11.5px] text-[#52525B] mt-0.5 leading-tight font-normal">
+                        +91 {m.phone}
                       </p>
                     </div>
                   </div>
 
-                  {/* Right side: Status Badge + Call + WhatsApp + Chevron */}
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {/* Status Pill */}
+                  {/* Right side: Status Badge + Detail Chevron */}
+                  <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
                     {getStatusBadge(m)}
-
-                    {/* Direct Phone Call Button */}
-                    <a
-                      href={`tel:${cleanPhone}`}
-                      onClick={(e) => e.stopPropagation()}
-                      className="w-7 h-7 rounded-full bg-[#EFF6FF] text-[#2563EB] hover:bg-[#DBEAFE] flex items-center justify-center transition-colors"
-                      title="Call member"
-                      aria-label={`Call ${m.name}`}
-                    >
-                      <Phone className="w-3.5 h-3.5 stroke-[2.2]" />
-                    </a>
-
-                    {/* Direct WhatsApp Button */}
-                    <a
-                      href={`https://wa.me/91${cleanPhone}?text=Hi%20${encodeURIComponent(m.name)},%20greetings%20from%20MuscleFit%20Gym!`}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="w-7 h-7 rounded-full bg-[#ECFDF5] text-[#16A34A] hover:bg-[#D1FAE5] flex items-center justify-center transition-colors"
-                      title="WhatsApp message"
-                      aria-label={`Send WhatsApp to ${m.name}`}
-                    >
-                      <MessageCircle className="w-3.5 h-3.5 stroke-[2.2]" />
-                    </a>
-
-                    {/* Detail Chevron */}
-                    <div className="w-3.5 h-3.5 flex items-center justify-center text-[#9CA3AF] group-hover:text-[#191919] transition-colors">
+                    <div className="w-4 h-4 flex items-center justify-center text-[#9CA3AF] group-hover:text-[#191919] transition-colors">
                       <ChevronRight className="w-3.5 h-3.5 stroke-[2.2]" />
                     </div>
                   </div>
                 </div>
 
-                {/* Bottom Row: 3 Detail Columns (Plan, Expiry, Last Visit) */}
-                <div className="grid grid-cols-3 gap-1.5 mt-2 pt-2 border-t border-[#F2EFE8]">
-                  
-                  {/* Col 1: Plan & Fee */}
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <div className="w-6 h-6 rounded-md bg-[#F3E8FF] text-[#9333EA] flex items-center justify-center shrink-0">
-                      <Dumbbell className="w-3 h-3 stroke-[2.2]" />
+                {/* Bottom Row: Plan / Expiry info on Left, Direct Call & WhatsApp Actions on Right */}
+                <div className="pt-2 border-t border-[#F2EFE8] flex items-center justify-between gap-2">
+                  {/* Left: Plan & Expiry */}
+                  <div className="flex items-center gap-2 sm:gap-3 flex-wrap min-w-0 text-[11px] sm:text-[11.5px]">
+                    <div className="flex items-center gap-1 min-w-0">
+                      <Dumbbell className="w-3.5 h-3.5 text-[#9333EA] shrink-0" />
+                      <span className="font-semibold text-[#191919] truncate">{m.membershipPlan}</span>
                     </div>
-                    <div className="min-w-0">
-                      <span className="text-[#6B7280] text-[10px] block truncate leading-none font-normal">
-                        {m.membershipPlan}
-                      </span>
-                      <span className="font-bold text-[#191919] text-[11.5px] truncate block mt-0.5 leading-none">
-                        {m.planFee || '₹2,000 / month'}
+                    <span className="text-[#D1D5DB]">•</span>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Calendar className="w-3.5 h-3.5 text-[#2563EB] shrink-0" />
+                      <span className="text-[#52525B]">
+                        {m.status === 'expired' ? 'Expired' : 'Expires'}:{' '}
+                        <span className="font-semibold text-[#191919]">{m.expiryDate}</span>
                       </span>
                     </div>
+                    {m.lastVisitDate && (
+                      <>
+                        <span className="text-[#D1D5DB] hidden sm:inline">•</span>
+                        <span className="text-[#71717A] hidden sm:inline">Last visit: {m.lastVisitDate}</span>
+                      </>
+                    )}
                   </div>
 
-                  {/* Col 2: Expiry Date */}
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <div className="w-6 h-6 rounded-md bg-[#EFF6FF] text-[#2563EB] flex items-center justify-center shrink-0">
-                      <Calendar className="w-3 h-3 stroke-[2.2]" />
-                    </div>
-                    <div className="min-w-0">
-                      <span className="text-[#6B7280] text-[10px] block truncate leading-none font-normal">
-                        {m.status === 'expired' ? 'Expired On' : 'Expires On'}
-                      </span>
-                      <span className="font-bold text-[#191919] text-[11.5px] truncate block mt-0.5 leading-none">
-                        {m.expiryDate}
-                      </span>
-                    </div>
-                  </div>
+                  {/* Right: Accessible Call & WhatsApp Buttons */}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <a
+                      href={`tel:${cleanPhone}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-7.5 h-7.5 sm:w-8 sm:h-8 rounded-lg bg-[#EFF6FF] hover:bg-[#DBEAFE] active:scale-95 text-[#2563EB] flex items-center justify-center transition-all shadow-2xs"
+                      title={`Call ${m.name}`}
+                      aria-label={`Call ${m.name}`}
+                    >
+                      <Phone className="w-3.5 h-3.5 stroke-[2.2]" />
+                    </a>
 
-                  {/* Col 3: Last Visit */}
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <div className="w-6 h-6 rounded-md bg-[#E0F2FE] text-[#0284C7] flex items-center justify-center shrink-0">
-                      <BarChart2 className="w-3 h-3 stroke-[2.2]" />
-                    </div>
-                    <div className="min-w-0">
-                      <span className="text-[#6B7280] text-[10px] block truncate leading-none font-normal">
-                        Last Visit
-                      </span>
-                      <span className="font-bold text-[#191919] text-[11.5px] truncate block mt-0.5 leading-none">
-                        {m.lastVisitDate}
-                      </span>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const defaultCat =
+                          m.pendingAmount > 0
+                            ? 'payment'
+                            : m.daysUntilExpiry <= 7
+                            ? 'renewal'
+                            : m.daysSinceLastVisit >= 7
+                            ? 'inactive'
+                            : 'renewal';
+                        setWhatsAppTarget({
+                          personId: m.id,
+                          personType: 'Member',
+                          name: m.name,
+                          phone: m.phone,
+                          planName: m.membershipPlan,
+                          expiryDate: m.expiryDate,
+                          daysUntilExpiry: m.daysUntilExpiry,
+                          pendingAmount: m.pendingAmount,
+                          lastVisitDate: m.lastVisitDate,
+                          daysSinceLastVisit: m.daysSinceLastVisit,
+                          defaultCategory: defaultCat,
+                        });
+                      }}
+                      className="w-7.5 h-7.5 sm:w-8 sm:h-8 rounded-lg bg-[#ECFDF5] hover:bg-[#D1FAE5] active:scale-95 text-[#16A34A] flex items-center justify-center transition-all shadow-2xs cursor-pointer"
+                      title={`WhatsApp message to ${m.name}`}
+                      aria-label={`Send WhatsApp to ${m.name}`}
+                    >
+                      <MessageCircle className="w-3.5 h-3.5 stroke-[2.2]" />
+                    </button>
                   </div>
-
                 </div>
               </div>
             );
           })
         )}
       </div>
+
+      {/* One-Tap WhatsApp Follow-Up Modal */}
+      <WhatsAppFollowUpModal
+        isOpen={Boolean(whatsAppTarget)}
+        target={whatsAppTarget}
+        gymName={gymName}
+        upiId={upiId}
+        onClose={() => setWhatsAppTarget(null)}
+        onConfirmSent={(payload) => {
+          if (onAddFollowUp) {
+            onAddFollowUp(payload.personId, {
+              note: `WhatsApp (${payload.category}): ${payload.messageText}`,
+              type: 'WhatsApp',
+            });
+          }
+        }}
+      />
 
       {/* ============================================================== */}
       {/* MODALS: Advanced Filter Sheet                                  */}

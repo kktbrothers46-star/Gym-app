@@ -646,14 +646,11 @@ export const MembershipPlansScreen: React.FC<MembershipPlansScreenProps> = ({
                   </div>
 
                   {/* Right: Price + Overflow Action Menu */}
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-2.5 shrink-0">
                     <div className="text-right">
-                      <div className="text-[17px] sm:text-[18px] font-bold text-[#102A71] leading-none">
+                      <div className="text-[17px] sm:text-[19px] font-extrabold text-[#102A71] leading-none">
                         ₹{plan.price.toLocaleString('en-IN')}
                       </div>
-                      <span className="text-[10px] text-[#71717A] font-medium block mt-1 leading-none">
-                        {stats.totalAssigned} enrolled
-                      </span>
                     </div>
 
                     {/* Clean Overflow Menu */}

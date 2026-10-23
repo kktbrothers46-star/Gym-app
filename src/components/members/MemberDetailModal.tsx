@@ -122,7 +122,7 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
 
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between gap-1.5">
-              <h3 className="text-base font-bold text-[#191919] truncate leading-tight">
+              <h3 className="text-base font-bold text-[#191919] break-words leading-tight">
                 {member.name}
               </h3>
               {getStatusBadge()}

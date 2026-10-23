@@ -34,6 +34,7 @@ interface RecordPaymentModalProps {
     planFee?: number;
     notes?: string;
     date?: string;
+    referenceId?: string;
   }) => void;
   initialMemberId?: string;
 }
@@ -201,8 +202,9 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
         paymentMethod: method,
         plan: currentMember.membershipPlan,
         planFee: targetFeeOrDue,
-        notes: combinedNotes || undefined,
+        notes: notes.trim() || undefined,
         date: paymentDate,
+        referenceId: transactionRef.trim() || undefined,
       });
 
       setSuccessInfo({

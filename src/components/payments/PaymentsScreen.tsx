@@ -28,16 +28,33 @@ import {
   CheckCircle2,
   Clock,
 } from 'lucide-react';
-import { Member, Payment } from '../../types/dashboard';
+import { Member, Payment, PaymentPromise, CashReconciliation, Expense } from '../../types/dashboard';
 import { MemberDetailView } from '../members/MemberDetailView';
 import { PaymentDetailView } from './PaymentDetailView';
+import {
+  PendingPaymentTrackerPanel,
+  DailyCollectionSummaryPanel,
+  PaymentPromiseTrackerPanel,
+} from './PaymentFeaturesPanels';
+import {
+  WhatsAppFollowUpModal,
+  WhatsAppFollowUpTarget,
+} from '../modals/WhatsAppFollowUpModal';
+
+export type PaymentsViewMode = 'transactions' | 'pending_dues' | 'daily_summary' | 'promises';
 
 interface PaymentsScreenProps {
   payments: Payment[];
+  expenses?: Expense[];
   members: Member[];
+  paymentPromises?: PaymentPromise[];
+  cashReconciliations?: CashReconciliation[];
+  expensesTotalThisMonth?: number;
+  gymName?: string;
   collectedThisMonth: number;
   isEmptyState?: boolean;
   initialFilterTab?: 'all' | 'paid' | 'partial' | 'pending' | 'overdue';
+  initialViewMode?: PaymentsViewMode;
   onOpenRecordPayment: (memberId?: string) => void;
   onOpenRenewModal: (memberId?: string) => void;
   onMarkAttendance: (memberId: string, memberName: string) => void;
@@ -49,6 +66,24 @@ interface PaymentsScreenProps {
   ) => void;
   onReversePayment?: (paymentId: string, reason?: string) => void;
   onSwitchToExpenses?: () => void;
+  onAddPaymentPromise?: (data: {
+    memberId: string;
+    promisedAmount: number;
+    promisedDate: string;
+    note?: string;
+  }) => void;
+  onUpdatePaymentPromise?: (
+    promiseId: string,
+    updates: Partial<PaymentPromise>
+  ) => void;
+  onCancelPaymentPromise?: (promiseId: string) => void;
+  onCompletePaymentPromise?: (promiseId: string) => void;
+  onSaveCashReconciliation?: (
+    date: string,
+    physicalCashCounted: number,
+    recordedCashAmount: number,
+    note?: string
+  ) => void;
 }
 
 interface PaymentAdvancedFilters {
@@ -151,10 +186,15 @@ function getMethodIcon(method: 'UPI' | 'Cash' | 'Card' | 'Bank Transfer' | 'Othe
 
 export const PaymentsScreen: React.FC<PaymentsScreenProps> = ({
   payments,
+  expenses = [],
   members,
+  paymentPromises = [],
+  cashReconciliations = [],
+  gymName = 'MuscleFit Gym',
   collectedThisMonth,
   isEmptyState = false,
   initialFilterTab = 'all',
+  initialViewMode = 'transactions',
   onOpenRecordPayment,
   onOpenRenewModal,
   onMarkAttendance,
@@ -163,7 +203,12 @@ export const PaymentsScreen: React.FC<PaymentsScreenProps> = ({
   onAddFollowUp,
   onReversePayment,
   onSwitchToExpenses,
+  onAddPaymentPromise,
+  onUpdatePaymentPromise,
+  onCancelPaymentPromise,
+  onSaveCashReconciliation,
 }) => {
+  const [viewMode, setViewMode] = useState<PaymentsViewMode>(initialViewMode);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTab, setSelectedTab] = useState<'all' | 'paid' | 'partial' | 'pending' | 'overdue'>(
     initialFilterTab
@@ -180,9 +225,38 @@ export const PaymentsScreen: React.FC<PaymentsScreenProps> = ({
   // Payment Detail View state & Member Detail View state
   const [selectedPaymentItem, setSelectedPaymentItem] = useState<EnrichedPaymentItem | null>(null);
   const [selectedMemberIdForDetail, setSelectedMemberIdForDetail] = useState<string | null>(null);
+  const [whatsAppTarget, setWhatsAppTarget] = useState<WhatsAppFollowUpTarget | null>(null);
+  const [preselectedMemberForPromise, setPreselectedMemberForPromise] = useState<{
+    memberId: string;
+    amount: number;
+  } | null>(null);
+
+  React.useEffect(() => {
+    setViewMode(initialViewMode);
+  }, [initialViewMode]);
+
+  React.useEffect(() => {
+    setSelectedTab(initialFilterTab);
+  }, [initialFilterTab]);
 
   const effectiveMembers = useMemo(() => (isEmptyState ? [] : members), [members, isEmptyState]);
   const effectivePayments = useMemo(() => (isEmptyState ? [] : payments), [payments, isEmptyState]);
+  const effectiveExpenses = useMemo(() => (isEmptyState ? [] : expenses), [expenses, isEmptyState]);
+  const effectivePromises = useMemo(
+    () => (isEmptyState ? [] : paymentPromises),
+    [paymentPromises, isEmptyState]
+  );
+  const activePromisesCount = useMemo(
+    () => effectivePromises.filter((p) => p.status === 'pending').length,
+    [effectivePromises]
+  );
+  const membersWithPendingBalanceCount = useMemo(
+    () =>
+      effectiveMembers.filter(
+        (m) => (m.pendingAmount || 0) > 0 && m.status !== 'inactive'
+      ).length,
+    [effectiveMembers]
+  );
 
   // Build unified, accurate payment items enriched with member data
   const enrichedPayments: EnrichedPaymentItem[] = useMemo(() => {
@@ -505,50 +579,101 @@ export const PaymentsScreen: React.FC<PaymentsScreenProps> = ({
       </header>
 
       {/* ============================================================== */}
-      {/* B. SEARCH & FILTER BAR                                         */}
+      {/* VIEW MODE SUB-NAVIGATION: Transactions | Pending Dues | Daily Summary | Promises */}
       {/* ============================================================== */}
-      <div className="mt-1 flex items-center gap-2">
-        <div className="relative flex-1">
-          <Search className="w-4 h-4 text-[#71717A] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none stroke-[2]" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search member, phone, ID or receipt"
-            className="w-full pl-9 pr-7 py-2 text-[12.5px] bg-white border border-[#EAE5DC] rounded-xl text-[#191919] placeholder-[#8E8E93] focus:outline-hidden focus:border-[#102A71] shadow-2xs transition-colors"
-          />
-          {searchQuery && (
+      <div className="mt-2 grid grid-cols-4 gap-1 p-1 bg-[#EAE5DC]/65 rounded-xl border border-[#E5E0D6]">
+        {[
+          { id: 'transactions', label: 'Transactions', badge: null },
+          {
+            id: 'pending_dues',
+            label: 'Pending Dues',
+            badge: membersWithPendingBalanceCount > 0 ? membersWithPendingBalanceCount : null,
+          },
+          { id: 'daily_summary', label: 'Daily Summary', badge: null },
+          {
+            id: 'promises',
+            label: 'Promises',
+            badge: activePromisesCount > 0 ? activePromisesCount : null,
+          },
+        ].map((mode) => {
+          const isActive = viewMode === mode.id;
+          return (
             <button
               type="button"
-              onClick={() => setSearchQuery('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#71717A] hover:text-[#191919] p-0.5 rounded-full cursor-pointer"
-              aria-label="Clear search"
+              key={mode.id}
+              onClick={() => setViewMode(mode.id as PaymentsViewMode)}
+              className={`py-1.5 px-1.5 rounded-lg text-[10.5px] sm:text-[11.5px] font-bold transition-all flex items-center justify-center gap-1 cursor-pointer truncate ${
+                isActive
+                  ? 'bg-[#102A71] text-white shadow-2xs'
+                  : 'text-[#4B5563] hover:text-[#191919]'
+              }`}
             >
-              <X className="w-3.5 h-3.5" />
+              <span className="truncate">{mode.label}</span>
+              {mode.badge !== null && (
+                <span
+                  className={`px-1.2 py-0.2 rounded-full text-[9px] font-bold leading-none shrink-0 ${
+                    isActive
+                      ? 'bg-white/20 text-white'
+                      : mode.id === 'pending_dues'
+                      ? 'bg-[#FEE2E2] text-[#DC2626]'
+                      : 'bg-[#FEF3C7] text-[#B45309]'
+                  }`}
+                >
+                  {mode.badge}
+                </span>
+              )}
             </button>
-          )}
-        </div>
-
-        {/* Filter Button */}
-        <button
-          type="button"
-          onClick={() => setIsFilterModalOpen(true)}
-          className={`w-9 h-9 sm:w-9.5 sm:h-9.5 rounded-xl border flex items-center justify-center transition-colors cursor-pointer relative shrink-0 ${
-            activeAdvancedFilterCount > 0
-              ? 'bg-[#EFF6FF] border-[#102A71] text-[#102A71]'
-              : 'bg-white border-[#EAE5DC] text-[#191919] hover:bg-[#FAF8F5]'
-          }`}
-          aria-label="Open payment filters"
-          title="Filter payments"
-        >
-          <SlidersHorizontal className="w-4 h-4 stroke-[2]" />
-          {activeAdvancedFilterCount > 0 && (
-            <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-[#102A71] text-white text-[9px] font-bold flex items-center justify-center">
-              {activeAdvancedFilterCount}
-            </span>
-          )}
-        </button>
+          );
+        })}
       </div>
+
+      {/* ============================================================== */}
+      {/* B. SEARCH & FILTER BAR (shown in Transactions mode)            */}
+      {/* ============================================================== */}
+      {viewMode === 'transactions' && (
+        <div className="mt-2.5 flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-[#71717A] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none stroke-[2]" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search member, phone, ID or receipt"
+              className="w-full pl-9 pr-7 py-2 text-[12.5px] bg-white border border-[#EAE5DC] rounded-xl text-[#191919] placeholder-[#8E8E93] focus:outline-hidden focus:border-[#102A71] shadow-2xs transition-colors"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#71717A] hover:text-[#191919] p-0.5 rounded-full cursor-pointer"
+                aria-label="Clear search"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Filter Button */}
+          <button
+            type="button"
+            onClick={() => setIsFilterModalOpen(true)}
+            className={`w-9 h-9 sm:w-9.5 sm:h-9.5 rounded-xl border flex items-center justify-center transition-colors cursor-pointer relative shrink-0 ${
+              activeAdvancedFilterCount > 0
+                ? 'bg-[#EFF6FF] border-[#102A71] text-[#102A71]'
+                : 'bg-white border-[#EAE5DC] text-[#191919] hover:bg-[#FAF8F5]'
+            }`}
+            aria-label="Open payment filters"
+            title="Filter payments"
+          >
+            <SlidersHorizontal className="w-4 h-4 stroke-[2]" />
+            {activeAdvancedFilterCount > 0 && (
+              <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-[#102A71] text-white text-[9px] font-bold flex items-center justify-center">
+                {activeAdvancedFilterCount}
+              </span>
+            )}
+          </button>
+        </div>
+      )}
 
       {/* ============================================================== */}
       {/* C. THREE SUMMARY CARDS: Collected, Pending Dues, Overdue       */}
@@ -557,9 +682,12 @@ export const PaymentsScreen: React.FC<PaymentsScreenProps> = ({
         {/* 1. Collected This Month (Pale Green) */}
         <button
           type="button"
-          onClick={() => setSelectedTab(selectedTab === 'paid' ? 'all' : 'paid')}
+          onClick={() => {
+            setViewMode('transactions');
+            setSelectedTab(selectedTab === 'paid' ? 'all' : 'paid');
+          }}
           className={`bg-[#ECF9F2] rounded-xl sm:rounded-2xl p-2.5 sm:p-3 flex flex-col justify-between text-left border transition-all cursor-pointer shadow-2xs ${
-            selectedTab === 'paid'
+            viewMode === 'transactions' && selectedTab === 'paid'
               ? 'border-[#16A34A] ring-1 ring-[#16A34A]/30'
               : 'border-[#CDEEDB] hover:border-[#A8E0C0]'
           }`}
@@ -583,16 +711,18 @@ export const PaymentsScreen: React.FC<PaymentsScreenProps> = ({
           </div>
 
           <span className="text-[9.5px] sm:text-[10.5px] text-[#15803D] font-medium mt-1.5 block leading-none truncate">
-            {summaryStats.collectedTotal > 0 ? '+18% this month' : 'No collections'}
+            {summaryStats.collectedTotal > 0
+              ? `${summaryStats.paidCount} collection${summaryStats.paidCount === 1 ? '' : 's'} received`
+              : 'No collections'}
           </span>
         </button>
 
         {/* 2. Pending Balance (Pale Amber) */}
         <button
           type="button"
-          onClick={() => setSelectedTab(selectedTab === 'pending' ? 'all' : 'pending')}
+          onClick={() => setViewMode(viewMode === 'pending_dues' ? 'transactions' : 'pending_dues')}
           className={`bg-[#FDF6E4] rounded-xl sm:rounded-2xl p-2.5 sm:p-3 flex flex-col justify-between text-left border transition-all cursor-pointer shadow-2xs ${
-            selectedTab === 'pending' || selectedTab === 'partial'
+            viewMode === 'pending_dues' || (viewMode === 'transactions' && (selectedTab === 'pending' || selectedTab === 'partial'))
               ? 'border-[#D97706] ring-1 ring-[#D97706]/30'
               : 'border-[#F7E3B5] hover:border-[#F2D08B]'
           }`}
@@ -623,9 +753,12 @@ export const PaymentsScreen: React.FC<PaymentsScreenProps> = ({
         {/* 3. Overdue Payments (Pale Red) */}
         <button
           type="button"
-          onClick={() => setSelectedTab(selectedTab === 'overdue' ? 'all' : 'overdue')}
+          onClick={() => {
+            setViewMode('transactions');
+            setSelectedTab(selectedTab === 'overdue' ? 'all' : 'overdue');
+          }}
           className={`bg-[#FDF1F1] rounded-xl sm:rounded-2xl p-2.5 sm:p-3 flex flex-col justify-between text-left border transition-all cursor-pointer shadow-2xs ${
-            selectedTab === 'overdue'
+            viewMode === 'transactions' && selectedTab === 'overdue'
               ? 'border-[#DC2626] ring-1 ring-[#DC2626]/30'
               : 'border-[#FADBD8] hover:border-[#F5B7B1]'
           }`}
@@ -655,8 +788,67 @@ export const PaymentsScreen: React.FC<PaymentsScreenProps> = ({
       </div>
 
       {/* ============================================================== */}
-      {/* D. FILTER TABS & SORT PILL ROW                                 */}
+      {/* FEATURE PANELS: Pending Dues / Daily Summary / Payment Promises */}
       {/* ============================================================== */}
+      {viewMode === 'pending_dues' && (
+        <PendingPaymentTrackerPanel
+          members={effectiveMembers}
+          payments={effectivePayments}
+          searchQuery={searchQuery}
+          onRecordPayment={(memberId) => onOpenRecordPayment(memberId)}
+          onOpenMemberDetail={(memberId) => setSelectedMemberIdForDetail(memberId)}
+          onOpenWhatsApp={(target) => setWhatsAppTarget(target)}
+          onOpenPromiseForMember={(memberId, defaultAmount) => {
+            setPreselectedMemberForPromise({ memberId, amount: defaultAmount });
+            setViewMode('promises');
+          }}
+        />
+      )}
+
+      {viewMode === 'daily_summary' && (
+        <DailyCollectionSummaryPanel
+          payments={effectivePayments}
+          expenses={effectiveExpenses}
+          members={effectiveMembers}
+          cashReconciliations={cashReconciliations}
+          onSaveCashReconciliation={(date, physicalCashCounted, recordedCashAmount, note) => {
+            if (onSaveCashReconciliation) {
+              onSaveCashReconciliation(date, physicalCashCounted, recordedCashAmount, note);
+            }
+          }}
+          onSelectTransaction={(paymentId) => {
+            const found = enrichedPayments.find((item) => item.id === paymentId);
+            if (found) setSelectedPaymentItem(found);
+          }}
+          onRecordPayment={() => onOpenRecordPayment(undefined)}
+        />
+      )}
+
+      {viewMode === 'promises' && (
+        <PaymentPromiseTrackerPanel
+          promises={effectivePromises}
+          members={effectiveMembers}
+          preselectedMemberForPromise={preselectedMemberForPromise}
+          onClearPreselectedPromise={() => setPreselectedMemberForPromise(null)}
+          onAddPromise={(data) => {
+            if (onAddPaymentPromise) onAddPaymentPromise(data);
+          }}
+          onUpdatePromise={(id, updates) => {
+            if (onUpdatePaymentPromise) onUpdatePaymentPromise(id, updates);
+          }}
+          onCancelPromise={(id) => {
+            if (onCancelPaymentPromise) onCancelPaymentPromise(id);
+          }}
+          onRecordPaymentForMember={(memberId) => onOpenRecordPayment(memberId)}
+          onOpenWhatsApp={(target) => setWhatsAppTarget(target)}
+        />
+      )}
+
+      {/* ============================================================== */}
+      {/* D. FILTER TABS & SORT PILL ROW (shown in Transactions mode)    */}
+      {/* ============================================================== */}
+      {viewMode === 'transactions' && (
+      <>
       <div className="mt-3 flex items-center justify-between gap-1.5 relative">
         {/* Scrollable Status Tabs */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none snap-x">
@@ -853,11 +1045,16 @@ export const PaymentsScreen: React.FC<PaymentsScreenProps> = ({
                     )}
 
                     <div className="min-w-0 flex-1">
-                      <h3 className="font-bold text-[13.5px] sm:text-[14px] text-[#191919] truncate leading-tight group-hover:text-[#102A71] transition-colors">
-                        {item.memberName}
-                      </h3>
-                      <p className="text-[11px] text-[#71717A] mt-0.5 truncate leading-none">
-                        ID: {item.memberCode} &nbsp;•&nbsp; {item.receiptNumber}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <h3 className="font-bold text-[13.5px] sm:text-[14.5px] text-[#191919] leading-snug group-hover:text-[#102A71] transition-colors break-words">
+                          {item.memberName}
+                        </h3>
+                        <span className="text-[10px] font-semibold text-[#71717A] bg-[#F4F1EA] px-1.5 py-0.5 rounded leading-none shrink-0">
+                          {item.memberCode}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-[#71717A] mt-0.5 leading-none">
+                        Receipt: {item.receiptNumber} &nbsp;•&nbsp; {formattedDate}
                       </p>
                     </div>
                   </div>
@@ -896,29 +1093,26 @@ export const PaymentsScreen: React.FC<PaymentsScreenProps> = ({
                       <Phone className="w-3.5 h-3.5 stroke-[2.2]" />
                     </a>
 
-                    <a
-                      href={`https://wa.me/91${cleanPhone}?text=${
-                        item.pendingAmount > 0
-                          ? `Hi%20${encodeURIComponent(
-                              item.memberName
-                            )},%20a%20friendly%20reminder%20from%20MuscleFit%20Gym%20regarding%20your%20pending%20membership%20balance%20of%20₹${item.pendingAmount.toLocaleString(
-                              'en-IN'
-                            )}%20for%20${encodeURIComponent(item.plan)}.`
-                          : `Hi%20${encodeURIComponent(
-                              item.memberName
-                            )},%20thank%20you%20for%20your%20payment%20of%20₹${item.paidAmount.toLocaleString(
-                              'en-IN'
-                            )}%20(${encodeURIComponent(item.receiptNumber)})%20at%20MuscleFit%20Gym!`
-                      }`}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="w-7 h-7 rounded-full bg-[#ECFDF5] text-[#16A34A] hover:bg-[#D1FAE5] flex items-center justify-center transition-colors"
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setWhatsAppTarget({
+                          personType: 'Member',
+                          personId: item.memberId,
+                          name: item.memberName,
+                          phone: item.phone,
+                          defaultCategory: 'payment',
+                          planName: item.plan,
+                          pendingAmount: item.pendingAmount,
+                        });
+                      }}
+                      className="w-7 h-7 rounded-full bg-[#ECFDF5] text-[#16A34A] hover:bg-[#D1FAE5] flex items-center justify-center transition-colors cursor-pointer"
                       title={`WhatsApp ${item.memberName}`}
                       aria-label={`Send WhatsApp message to ${item.memberName}`}
                     >
                       <MessageCircle className="w-3.5 h-3.5 stroke-[2.2]" />
-                    </a>
+                    </button>
 
                     <ChevronRight className="w-3.5 h-3.5 text-[#9CA3AF] group-hover:text-[#191919] transition-colors shrink-0" />
                   </div>
@@ -997,6 +1191,25 @@ export const PaymentsScreen: React.FC<PaymentsScreenProps> = ({
           })
         )}
       </div>
+      </>
+      )}
+
+      {/* One-Tap WhatsApp Follow-Up Modal */}
+      <WhatsAppFollowUpModal
+        isOpen={Boolean(whatsAppTarget)}
+        target={whatsAppTarget}
+        gymName={gymName}
+        onClose={() => setWhatsAppTarget(null)}
+        onConfirmSent={(payload) => {
+          if (onAddFollowUp) {
+            onAddFollowUp(payload.personId, {
+              type: 'WhatsApp',
+              note: `WhatsApp payment follow-up sent: "${payload.messageText.slice(0, 90)}${payload.messageText.length > 90 ? '...' : ''}"`,
+            });
+          }
+          setWhatsAppTarget(null);
+        }}
+      />
 
       {/* ============================================================== */}
       {/* G. ADVANCED FILTER MODAL FOR PAYMENTS                          */}

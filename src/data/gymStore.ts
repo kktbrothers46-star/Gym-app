@@ -8,6 +8,8 @@ import {
   GymProfile,
   Member,
   Payment,
+  PaymentPromise,
+  CashReconciliation,
   Expense,
   AttendanceRecord,
   RecentActivity,
@@ -33,6 +35,9 @@ import {
   OnboardingPreferences,
   GymStoreState,
 } from '../types/dashboard';
+import {
+  syncStoreDiffToFirestore,
+} from '../lib/firestoreSync';
 
 const STORAGE_KEY = 'gym_business_os_production_v1';
 
@@ -83,7 +88,7 @@ export const INITIAL_SETTINGS: GymSettings = {
 };
 
 export const INITIAL_ONBOARDING: OnboardingPreferences = {
-  hasCompletedOnboarding: false,
+  hasCompletedOnboarding: true,
   currentStep: 'welcome',
   selectedRole: null,
   gymName: '',
@@ -248,6 +253,8 @@ function buildDynamicMonthlyMetrics(
       .filter(
         (p) =>
           p.status !== 'refunded' &&
+          p.status !== 'pending' &&
+          p.status !== 'overdue' &&
           p.amount > 0 &&
           ((p.date && p.date.startsWith(yearMonthPrefix)) || p.month === monthLabel)
       )
@@ -407,6 +414,10 @@ export function loadGymData(): GymStoreState {
         plans: Array.isArray(parsed.plans) ? parsed.plans : [],
         renewals: Array.isArray(parsed.renewals) ? parsed.renewals : [],
         payments: Array.isArray(parsed.payments) ? parsed.payments : [],
+        paymentPromises: Array.isArray(parsed.paymentPromises) ? parsed.paymentPromises : [],
+        cashReconciliations: Array.isArray(parsed.cashReconciliations)
+          ? parsed.cashReconciliations
+          : [],
         expenses: Array.isArray(parsed.expenses) ? parsed.expenses : [],
         leads: Array.isArray(parsed.leads) ? parsed.leads : [],
         followUpTasks: Array.isArray(parsed.followUpTasks) ? parsed.followUpTasks : [],
@@ -434,6 +445,8 @@ export function loadGymData(): GymStoreState {
     plans: [] as MembershipPlan[],
     renewals: [] as RenewalRecord[],
     payments: [] as Payment[],
+    paymentPromises: [] as PaymentPromise[],
+    cashReconciliations: [] as CashReconciliation[],
     expenses: [] as Expense[],
     leads: [] as Lead[],
     followUpTasks: [] as FollowUpTask[],
@@ -467,10 +480,84 @@ function calculateSummary(state: any): GymStoreState {
     };
   }
 
-  const members: Member[] = state.members || [];
+  const rawMembers: Member[] = state.members || [];
   const payments: Payment[] = state.payments || [];
   const expenses: Expense[] = state.expenses || [];
   const attendance: AttendanceRecord[] = state.attendance || [];
+  const todayIso = getLocalIsoDate();
+  const todayMidnight = new Date(todayIso + 'T00:00:00').getTime();
+
+  // Map latest actual attendance date per memberId
+  const latestAttendanceByMember = new Map<string, { dateIso: string; display: string }>();
+  attendance.forEach((rec) => {
+    if (!rec.memberId) return;
+    let recIso = rec.date || '';
+    if (!recIso && rec.timestamp?.startsWith('Today')) {
+      recIso = todayIso;
+    }
+    if (!recIso) return;
+    const prev = latestAttendanceByMember.get(rec.memberId);
+    if (!prev || recIso > prev.dateIso) {
+      latestAttendanceByMember.set(rec.memberId, {
+        dateIso: recIso,
+        display:
+          recIso === todayIso
+            ? `Today${rec.checkInTime ? `, ${rec.checkInTime}` : ''}`
+            : new Date(recIso + 'T00:00:00').toLocaleDateString('en-IN', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+              }),
+      });
+    }
+  });
+
+  // Recalculate daysUntilExpiry from actual expiryDate and daysSinceLastVisit from actual attendance
+  const members: Member[] = rawMembers.map((m) => {
+    let computedDaysUntilExpiry = m.daysUntilExpiry;
+    if (m.expiryDate) {
+      const parsedExp = new Date(m.expiryDate);
+      if (!isNaN(parsedExp.getTime())) {
+        const expIso = getLocalIsoDate(parsedExp);
+        const expMidnight = new Date(expIso + 'T00:00:00').getTime();
+        computedDaysUntilExpiry = Math.round((expMidnight - todayMidnight) / (1000 * 60 * 60 * 24));
+      }
+    }
+
+    let computedDaysSinceVisit = m.daysSinceLastVisit;
+    let computedLastVisitDate = m.lastVisitDate;
+    const latestAtt = latestAttendanceByMember.get(m.id);
+    if (latestAtt) {
+      const attMidnight = new Date(latestAtt.dateIso + 'T00:00:00').getTime();
+      computedDaysSinceVisit = Math.max(
+        0,
+        Math.round((todayMidnight - attMidnight) / (1000 * 60 * 60 * 24))
+      );
+      computedLastVisitDate = latestAtt.display;
+    }
+
+    // Derive accurate status from actual dates & balance
+    let derivedStatus: Member['status'] = m.status;
+    if (computedDaysUntilExpiry < 0) {
+      derivedStatus = 'expired';
+    } else if ((m.pendingAmount || 0) > 0) {
+      derivedStatus = 'pending';
+    } else if (computedDaysUntilExpiry <= 7) {
+      derivedStatus = 'expiring';
+    } else if (m.status === 'inactive' || (latestAtt && computedDaysSinceVisit >= 14)) {
+      derivedStatus = 'inactive';
+    } else {
+      derivedStatus = 'active';
+    }
+
+    return {
+      ...m,
+      daysUntilExpiry: computedDaysUntilExpiry,
+      daysSinceLastVisit: computedDaysSinceVisit,
+      lastVisitDate: computedLastVisitDate,
+      status: derivedStatus,
+    };
+  });
 
   // Recompute dynamic monthly metrics from real records
   const monthlyMetrics = buildDynamicMonthlyMetrics(payments, members, attendance);
@@ -502,6 +589,8 @@ function calculateSummary(state: any): GymStoreState {
     .filter(
       (p) =>
         p.status !== 'refunded' &&
+        p.status !== 'pending' &&
+        p.status !== 'overdue' &&
         p.amount > 0 &&
         ((p.date && p.date.startsWith(currentYearMonth)) ||
           p.month === currentShortMonthLabel)
@@ -542,6 +631,9 @@ function calculateSummary(state: any): GymStoreState {
 
   return {
     ...state,
+    members,
+    paymentPromises: state.paymentPromises || [],
+    cashReconciliations: state.cashReconciliations || [],
     notifications,
     monthlyMetrics,
     activeMembersCount,
@@ -568,6 +660,16 @@ export function saveGymData(state: GymStoreState) {
 let listeners: Array<(state: GymStoreState) => void> = [];
 let currentState: GymStoreState = loadGymData();
 
+export function setFullGymStore(loaded: Partial<GymStoreState>) {
+  const next = calculateSummary({
+    ...currentState,
+    ...loaded,
+  });
+  currentState = next;
+  saveGymData(next);
+  listeners.forEach((l) => l(next));
+}
+
 export function useGymStore() {
   const [state, setState] = useState<GymStoreState>(currentState);
 
@@ -580,9 +682,11 @@ export function useGymStore() {
   }, []);
 
   const updateStore = (updater: (prev: GymStoreState) => GymStoreState) => {
-    const next = calculateSummary(updater(currentState));
+    const prev = currentState;
+    const next = calculateSummary(updater(prev));
     currentState = next;
     saveGymData(next);
+    syncStoreDiffToFirestore(prev, next);
     listeners.forEach((l) => l(next));
   };
 
@@ -677,6 +781,7 @@ export function useGymStore() {
     planFee?: number;
     notes?: string;
     date?: string;
+    referenceId?: string;
   }) => {
     updateStore((prev) => {
       const targetMember = prev.members.find((m) => m.id === paymentData.memberId);
@@ -740,9 +845,10 @@ export function useGymStore() {
         plan: paymentData.plan,
         receiptNumber: `${prefix}${nextReceiptSeq}`,
         referenceId:
-          paymentData.paymentMethod === 'UPI'
+          paymentData.referenceId ||
+          (paymentData.paymentMethod === 'UPI'
             ? `UPI${Math.floor(100000000 + Math.random() * 900000000)}`
-            : undefined,
+            : undefined),
         notes: paymentData.notes,
       };
 
@@ -788,10 +894,28 @@ export function useGymStore() {
         badgeType: nextPending > 0 ? 'warning' : 'success',
       };
 
+      // Auto-complete any pending payment promises for this member if balance cleared or promised amount met
+      const updatedPromises = (prev.paymentPromises || []).map((pr) => {
+        if (
+          pr.memberId === paymentData.memberId &&
+          pr.status === 'pending' &&
+          paidNow > 0 &&
+          (nextPending === 0 || paidNow >= pr.promisedAmount)
+        ) {
+          return {
+            ...pr,
+            status: 'completed' as const,
+            completedAt: paymentDate,
+          };
+        }
+        return pr;
+      });
+
       return {
         ...prev,
         members: updatedMembers,
         payments: [payment, ...updatedExistingPayments],
+        paymentPromises: updatedPromises,
         activities: [activity, ...prev.activities],
       };
     });
@@ -1052,12 +1176,24 @@ export function useGymStore() {
     }
   ) => {
     updateStore((prev) => {
+      const todayIso = getLocalIsoDate();
+      // Prevent duplicate renewal records on the same day for the same member & plan
+      const alreadyRenewedToday = (prev.renewals || []).some(
+        (r) =>
+          r.memberId === memberId &&
+          r.renewedAt === todayIso &&
+          r.newPlan === renewalData.membershipPlan &&
+          r.status === 'completed'
+      );
+      if (alreadyRenewedToday) {
+        return prev;
+      }
+
       let renewedMemberName = '';
       let renewedMemberCode = '';
       let prevPlanName = '';
       let prevExpiryStr = '';
       let formattedNewExpiry = '';
-      const todayIso = getLocalIsoDate();
       const totalPlanPrice =
         renewalData.planPrice !== undefined
           ? renewalData.planPrice
@@ -2438,9 +2574,13 @@ export function useGymStore() {
         completedAt: new Date().toISOString(),
       };
 
-      // If the user selected offered plans during onboarding and no plans exist yet, create real starter plans for those durations
+      // If the user selected real offered plans during onboarding and no plans exist yet, create starter plans for those durations
       let nextPlans = [...(prev.plans || [])];
-      if (nextPlans.length === 0 && nextOnboarding.offeredPlans?.length) {
+      if (
+        nextPlans.length === 0 &&
+        nextOnboarding.offeredPlans?.length &&
+        !nextOnboarding.offeredPlans.includes("Haven't created plans yet")
+      ) {
         const todayIso = getLocalIsoDate();
         const planTemplates: Array<{
           match: string;
@@ -2570,13 +2710,224 @@ export function useGymStore() {
     listeners.forEach((l) => l(fresh));
   };
 
+  const importMembersBatch = (
+    rows: Array<
+      Omit<Member, 'id'> & {
+        initialPaidAmount?: number;
+        paymentMethod?: 'UPI' | 'Cash' | 'Card' | 'Bank Transfer';
+      }
+    >
+  ): { importedCount: number; skippedDuplicatesCount: number } => {
+    let importedCount = 0;
+    let skippedDuplicatesCount = 0;
+
+    updateStore((prev) => {
+      const existingPhones = new Set(
+        prev.members
+          .map((m) => (m.phone || '').replace(/[^0-9]/g, '').slice(-10))
+          .filter((p) => p.length === 10)
+      );
+      const existingNameKeys = new Set(
+        prev.members.map(
+          (m) =>
+            `${m.name.trim().toLowerCase()}|${(m.phone || '').replace(/[^0-9]/g, '').slice(-10)}`
+        )
+      );
+
+      const addedMembers: Member[] = [];
+      const nextPayments = [...prev.payments];
+      const todayIso = getLocalIsoDate();
+      const prefix = prev.settings?.receiptPrefix || 'PAY';
+      let memberSeq = prev.members.length + 1;
+      let paymentSeq = prev.payments.length + 1;
+
+      rows.forEach((row, idx) => {
+        const cleanPhone = (row.phone || '').replace(/[^0-9]/g, '').slice(-10);
+        const nameKey = `${(row.name || '').trim().toLowerCase()}|${cleanPhone}`;
+
+        if (
+          (cleanPhone.length === 10 && existingPhones.has(cleanPhone)) ||
+          existingNameKeys.has(nameKey)
+        ) {
+          skippedDuplicatesCount++;
+          return;
+        }
+
+        if (cleanPhone.length === 10) existingPhones.add(cleanPhone);
+        existingNameKeys.add(nameKey);
+
+        const nextCode = `MBR${String(memberSeq++).padStart(3, '0')}`;
+        const memberId = `m-imp-${Date.now()}-${idx}`;
+        const parsedPlanFee =
+          parseInt(String(row.planFee || '').replace(/[^0-9]/g, ''), 10) || 0;
+        const pendingAmt = Math.max(0, row.pendingAmount || 0);
+        const paidNow =
+          row.initialPaidAmount !== undefined
+            ? Math.max(0, row.initialPaidAmount)
+            : Math.max(0, parsedPlanFee - pendingAmt);
+
+        const { initialPaidAmount, paymentMethod, ...memberFields } = row;
+
+        const member: Member = {
+          ...memberFields,
+          id: memberId,
+          memberCode: row.memberCode || nextCode,
+          status: pendingAmt > 0 ? 'pending' : row.status || 'active',
+          visitsThisMonth: row.visitsThisMonth ?? 0,
+          totalVisits: row.totalVisits ?? 0,
+        };
+
+        addedMembers.push(member);
+        importedCount++;
+
+        if (paidNow > 0 || pendingAmt > 0) {
+          const payment: Payment = {
+            id: `p-imp-${Date.now()}-${idx}`,
+            memberId: member.id,
+            memberName: member.name,
+            memberCode: member.memberCode,
+            amount: paidNow,
+            planFee: parsedPlanFee || paidNow + pendingAmt,
+            previouslyPaid: 0,
+            pendingAmount: pendingAmt,
+            date: member.startDate || todayIso,
+            time: '10:00 AM',
+            month: getLocalMonthLabel(),
+            status:
+              pendingAmt > 0 ? (paidNow > 0 ? 'partial' : 'pending') : 'completed',
+            paymentMethod: paymentMethod || prev.settings?.defaultPaymentMethod || 'UPI',
+            plan: member.membershipPlan,
+            receiptNumber: `${prefix}${String(paymentSeq++).padStart(5, '0')}`,
+          };
+          nextPayments.unshift(payment);
+        }
+      });
+
+      if (addedMembers.length === 0) return prev;
+
+      const activity: RecentActivity = {
+        id: `act-imp-${Date.now()}`,
+        type: 'member_joined',
+        title: `Imported ${addedMembers.length} Member${addedMembers.length === 1 ? '' : 's'}`,
+        description: `Bulk imported ${addedMembers.length} member record${
+          addedMembers.length === 1 ? '' : 's'
+        } via CSV/Excel.`,
+        timestamp: 'Just now',
+        badgeType: 'purple',
+      };
+
+      return {
+        ...prev,
+        members: [...addedMembers, ...prev.members],
+        payments: nextPayments,
+        activities: [activity, ...prev.activities],
+      };
+    });
+
+    return { importedCount, skippedDuplicatesCount };
+  };
+
+  const addPaymentPromise = (data: {
+    memberId: string;
+    promisedAmount: number;
+    promisedDate: string;
+    note?: string;
+  }) => {
+    updateStore((prev) => {
+      const member = prev.members.find((m) => m.id === data.memberId);
+      if (!member) return prev;
+      const todayIso = getLocalIsoDate();
+      const promise: PaymentPromise = {
+        id: `prm-${Date.now()}`,
+        memberId: member.id,
+        memberName: member.name,
+        memberCode: member.memberCode || member.id,
+        memberPhone: member.phone,
+        promisedAmount: Math.max(0, data.promisedAmount),
+        promisedDate: data.promisedDate || todayIso,
+        createdAt: todayIso,
+        status: 'pending',
+        note: data.note?.trim() || undefined,
+        planName: member.membershipPlan,
+      };
+      return {
+        ...prev,
+        paymentPromises: [promise, ...(prev.paymentPromises || [])],
+      };
+    });
+  };
+
+  const updatePaymentPromise = (
+    promiseId: string,
+    updates: Partial<PaymentPromise>
+  ) => {
+    updateStore((prev) => ({
+      ...prev,
+      paymentPromises: (prev.paymentPromises || []).map((p) =>
+        p.id === promiseId ? { ...p, ...updates } : p
+      ),
+    }));
+  };
+
+  const cancelPaymentPromise = (promiseId: string) => {
+    updateStore((prev) => ({
+      ...prev,
+      paymentPromises: (prev.paymentPromises || []).map((p) =>
+        p.id === promiseId ? { ...p, status: 'cancelled' as const } : p
+      ),
+    }));
+  };
+
+  const completePaymentPromise = (promiseId: string) => {
+    const todayIso = getLocalIsoDate();
+    updateStore((prev) => ({
+      ...prev,
+      paymentPromises: (prev.paymentPromises || []).map((p) =>
+        p.id === promiseId
+          ? { ...p, status: 'completed' as const, completedAt: todayIso }
+          : p
+      ),
+    }));
+  };
+
+  const saveCashReconciliation = (
+    date: string,
+    physicalCashCounted: number,
+    recordedCashAmount: number,
+    note?: string
+  ) => {
+    updateStore((prev) => {
+      const recId = `rec-${date}`;
+      const record: CashReconciliation = {
+        id: recId,
+        date,
+        recordedCashAmount,
+        physicalCashCounted,
+        difference: physicalCashCounted - recordedCashAmount,
+        note: note?.trim() || undefined,
+        updatedAt: new Date().toISOString(),
+      };
+      const existing = (prev.cashReconciliations || []).filter((r) => r.date !== date && r.id !== recId);
+      return {
+        ...prev,
+        cashReconciliations: [record, ...existing],
+      };
+    });
+  };
+
   return {
     state,
     addMember,
+    importMembersBatch,
     updateMember,
     archiveMember,
     recordPayment,
     reversePayment,
+    addPaymentPromise,
+    updatePaymentPromise,
+    cancelPaymentPromise,
+    completePaymentPromise,
+    saveCashReconciliation,
     renewMembership,
     addFollowUp,
     addLead,
@@ -2618,5 +2969,6 @@ export function useGymStore() {
     resetOnboarding,
     toggleEmptyState,
     resetToDefault,
+    setFullGymStore,
   };
 }

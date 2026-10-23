@@ -1075,8 +1075,8 @@ export const MembershipReportScreen: React.FC<MembershipReportScreenProps> = ({
                       {getInitials(member.name)}
                     </div>
                   )}
-                  <div className="min-w-0">
-                    <div className="text-[12.5px] font-bold text-[#191919] truncate">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[12.5px] font-bold text-[#191919] break-words leading-tight">
                       {member.name}
                     </div>
                     <div className="text-[10.5px] font-medium text-[#71717A] truncate">

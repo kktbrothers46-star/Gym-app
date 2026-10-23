@@ -1,0 +1,393 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Registered app user representing a gym owner or gym member.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "format": "email", "description": "User email address" },
+        "name": { "type": "string", "description": "User display name" },
+        "role": { "type": "string", "enum": ["owner", "member"], "description": "Primary account role" },
+        "gymId": { "type": "string", "description": "Associated Gym ID" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Account creation timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last update timestamp" }
+      },
+      "required": ["uid", "email", "name", "role", "createdAt"]
+    },
+    "Gym": {
+      "title": "Gym Profile",
+      "description": "Primary gym business profile owned by an authenticated user.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique Gym ID" },
+        "ownerId": { "type": "string", "description": "UID of the gym owner" },
+        "name": { "type": "string", "description": "Gym business trade name" },
+        "ownerName": { "type": "string", "description": "Owner contact name" },
+        "location": { "type": "string", "description": "Location / Country" },
+        "currency": { "type": "string", "description": "Currency code (e.g. INR)" },
+        "phone": { "type": "string", "description": "Official contact phone number" },
+        "email": { "type": "string", "description": "Official contact email" },
+        "address": { "type": "string", "description": "Gym physical address" },
+        "city": { "type": "string", "description": "City" },
+        "pincode": { "type": "string", "description": "Postal code" },
+        "gstNumber": { "type": "string", "description": "GST registration number" },
+        "openingHours": { "type": "string", "description": "Weekday opening hours" },
+        "sundayHours": { "type": "string", "description": "Sunday opening hours" },
+        "establishedYear": { "type": "string", "description": "Year established" },
+        "branchCode": { "type": "string", "description": "Branch identifier" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Update timestamp" }
+      },
+      "required": ["id", "ownerId", "name", "createdAt"]
+    },
+    "GymSettings": {
+      "title": "Gym Settings",
+      "description": "Operational preferences, billing configuration, and notification triggers for a gym.",
+      "type": "object",
+      "properties": {
+        "gymId": { "type": "string", "description": "Associated Gym ID" },
+        "ownerId": { "type": "string", "description": "Owner UID" },
+        "acceptedPaymentMethods": { "type": "array", "description": "Enabled payment channels" },
+        "defaultPaymentMethod": { "type": "string", "description": "Preferred payment method" },
+        "upiId": { "type": "string", "description": "UPI identifier for gym dues" },
+        "receiptPrefix": { "type": "string", "description": "Invoice prefix" },
+        "enableGstBilling": { "type": "boolean", "description": "GST tax invoice enabled flag" },
+        "gstPercentage": { "type": "number", "description": "Applicable GST tax rate" },
+        "allowPartialPayments": { "type": "boolean", "description": "Allow installment payments" },
+        "renewalGracePeriodDays": { "type": "number", "description": "Grace period days after expiry" },
+        "expiryReminderDays": { "type": "number", "description": "Days before expiry to alert" },
+        "autoMarkInactiveDays": { "type": "number", "description": "Days without visit before inactive mark" },
+        "allowCheckInWithPendingDues": { "type": "boolean", "description": "Allow entry if dues pending" },
+        "blockExpiredMemberCheckIn": { "type": "boolean", "description": "Deny check-in if expired" },
+        "defaultCheckInMethod": { "type": "string", "description": "Default method (QR_Scan, Manual, Biometric)" },
+        "notifyMembershipExpiry": { "type": "boolean", "description": "Alert on membership expiry" },
+        "notifyPendingPayments": { "type": "boolean", "description": "Alert on pending dues" },
+        "notifyInactiveMembers": { "type": "boolean", "description": "Alert on inactive member streaks" },
+        "notifyNewLeadsAndFollowUps": { "type": "boolean", "description": "Alert on follow up tasks" },
+        "notifyDailySummary": { "type": "boolean", "description": "Daily digest alerts" },
+        "notifyStaffAttendanceAndSalary": { "type": "boolean", "description": "Staff alerts" },
+        "whatsappRemindersEnabled": { "type": "boolean", "description": "WhatsApp communication active" },
+        "whatsappRenewalTemplate": { "type": "string", "description": "Renewal WhatsApp template message" },
+        "whatsappPaymentTemplate": { "type": "string", "description": "Payment reminder WhatsApp template message" }
+      },
+      "required": ["gymId", "ownerId"]
+    },
+    "OnboardingPreferences": {
+      "title": "Gym Onboarding Preferences",
+      "description": "Progress and answers collected during gym owner setup.",
+      "type": "object",
+      "properties": {
+        "gymId": { "type": "string", "description": "Associated Gym ID" },
+        "ownerId": { "type": "string", "description": "Owner UID" },
+        "hasCompletedOnboarding": { "type": "boolean", "description": "Whether onboarding has finished" },
+        "currentStep": { "type": "string", "description": "Current unfinished step key" },
+        "selectedRole": { "type": "string", "description": "Role chosen during onboarding" },
+        "gymName": { "type": "string", "description": "Gym name entered during onboarding" },
+        "memberCountOption": { "type": "string", "description": "Member count tier chosen" },
+        "customMemberCount": { "type": "string", "description": "Custom member count estimate" },
+        "managementMethod": { "type": "string", "description": "Previous management method" },
+        "customManagementMethod": { "type": "string", "description": "Custom management method detail" },
+        "challenges": { "type": "array", "description": "Selected business challenge labels" },
+        "customChallenge": { "type": "string", "description": "Custom business challenge" },
+        "offeredPlans": { "type": "array", "description": "Plan durations offered" },
+        "customPlanDuration": { "type": "string", "description": "Custom duration string" },
+        "paymentMethods": { "type": "array", "description": "Payment methods accepted" },
+        "customPaymentMethod": { "type": "string", "description": "Custom payment method description" }
+      },
+      "required": ["gymId", "ownerId", "hasCompletedOnboarding"]
+    },
+    "Member": {
+      "title": "Gym Member",
+      "description": "Member record belonging to a specific gym.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique member identifier" },
+        "gymId": { "type": "string", "description": "Associated Gym ID" },
+        "ownerId": { "type": "string", "description": "Owner UID" },
+        "name": { "type": "string", "description": "Full name of the member" },
+        "phone": { "type": "string", "description": "Contact phone number" },
+        "email": { "type": "string", "description": "Contact email address" },
+        "status": { "type": "string", "enum": ["active", "pending", "expiring", "expired", "archived"] },
+        "planId": { "type": "string", "description": "Associated membership plan ID" },
+        "planName": { "type": "string", "description": "Membership plan display name" },
+        "planPrice": { "type": "number", "description": "Total plan fee" },
+        "amountPaid": { "type": "number", "description": "Total amount paid toward plan" },
+        "balanceDue": { "type": "number", "description": "Remaining unpaid balance" },
+        "startDate": { "type": "string", "format": "date", "description": "Membership start date (YYYY-MM-DD)" },
+        "expiryDate": { "type": "string", "format": "date", "description": "Membership expiry date (YYYY-MM-DD)" },
+        "daysRemaining": { "type": "number", "description": "Days until expiration" },
+        "daysSinceLastVisit": { "type": "number", "description": "Days since last check-in" },
+        "lastCheckIn": { "type": "string", "description": "Last recorded check-in date or label" },
+        "totalVisits": { "type": "number", "description": "Total recorded check-in count" },
+        "notes": { "type": "string", "description": "Staff notes" },
+        "memberCode": { "type": "string", "description": "Unique member barcode/identifier" },
+        "gender": { "type": "string", "description": "Gender" },
+        "dateOfBirth": { "type": "string", "description": "DOB" },
+        "bloodGroup": { "type": "string", "description": "Blood group" },
+        "emergencyContactName": { "type": "string", "description": "Emergency contact name" },
+        "emergencyContactPhone": { "type": "string", "description": "Emergency contact phone" },
+        "photoUrl": { "type": "string", "description": "Member profile photo URL" },
+        "medicalNotes": { "type": "string", "description": "Medical conditions / allergies" },
+        "lockerNumber": { "type": "string", "description": "Assigned locker number" },
+        "assignedTrainerId": { "type": "string", "description": "Assigned trainer ID" },
+        "assignedTrainerName": { "type": "string", "description": "Assigned trainer name" },
+        "customFields": { "type": "object", "description": "Dynamic key-value properties" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last update timestamp" }
+      },
+      "required": ["id", "gymId", "ownerId", "name", "phone", "status"]
+    },
+    "MembershipPlan": {
+      "title": "Membership Plan",
+      "description": "Membership pricing tier defined by a gym.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique plan ID" },
+        "gymId": { "type": "string", "description": "Associated Gym ID" },
+        "ownerId": { "type": "string", "description": "Owner UID" },
+        "code": { "type": "string", "description": "Plan code (e.g. PLN001)" },
+        "name": { "type": "string", "description": "Plan name" },
+        "durationValue": { "type": "number", "description": "Duration numerical amount" },
+        "durationUnit": { "type": "string", "enum": ["days", "months", "years"] },
+        "durationDays": { "type": "number", "description": "Standard duration in calendar days" },
+        "durationLabel": { "type": "string", "description": "Display duration label" },
+        "price": { "type": "number", "description": "Plan fee" },
+        "status": { "type": "string", "enum": ["active", "inactive", "archived"] },
+        "isCustom": { "type": "boolean", "description": "Custom plan flag" },
+        "description": { "type": "string", "description": "Plan description" },
+        "features": { "type": "array", "description": "Plan feature bullet points" },
+        "createdAt": { "type": "string", "format": "date", "description": "Creation date" },
+        "category": { "type": "string", "description": "Category (General, Premium, Custom)" }
+      },
+      "required": ["id", "gymId", "ownerId", "name", "price", "status"]
+    },
+    "Payment": {
+      "title": "Payment Record",
+      "description": "Financial transaction recording fee collection or partial payment.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique payment identifier" },
+        "gymId": { "type": "string", "description": "Associated Gym ID" },
+        "ownerId": { "type": "string", "description": "Owner UID" },
+        "receiptNumber": { "type": "string", "description": "Receipt/invoice number" },
+        "memberId": { "type": "string", "description": "Associated member ID" },
+        "memberName": { "type": "string", "description": "Associated member display name" },
+        "memberPhone": { "type": "string", "description": "Member contact phone" },
+        "amount": { "type": "number", "description": "Amount collected in this payment" },
+        "planId": { "type": "string", "description": "Associated membership plan ID" },
+        "planName": { "type": "string", "description": "Associated plan name" },
+        "planPrice": { "type": "number", "description": "Total plan price" },
+        "date": { "type": "string", "format": "date", "description": "Transaction date" },
+        "month": { "type": "string", "description": "Month label (e.g. Oct 2026)" },
+        "paymentMethod": { "type": "string", "enum": ["UPI", "Cash", "Card", "Bank Transfer"] },
+        "status": { "type": "string", "enum": ["received", "partial", "pending", "overdue", "refunded"] },
+        "pendingAmount": { "type": "number", "description": "Remaining unpaid balance on plan" },
+        "notes": { "type": "string", "description": "Payment notes / transaction reference" },
+        "receivedByStaffName": { "type": "string", "description": "Staff member who processed the transaction" },
+        "recordedAt": { "type": "string", "format": "date-time", "description": "Audit timestamp" },
+        "isReversed": { "type": "boolean", "description": "Reversal flag" },
+        "reversalReason": { "type": "string", "description": "Reason for reversal" },
+        "reversalDate": { "type": "string", "description": "Date reversed" }
+      },
+      "required": ["id", "gymId", "ownerId", "memberId", "amount", "status", "date"]
+    },
+    "Expense": {
+      "title": "Gym Expense",
+      "description": "Operational expense voucher for facility costs.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique expense identifier" },
+        "gymId": { "type": "string", "description": "Associated Gym ID" },
+        "ownerId": { "type": "string", "description": "Owner UID" },
+        "category": { "type": "string", "description": "Expense category (Rent, Electricity, Equipment, Maintenance, etc.)" },
+        "title": { "type": "string", "description": "Expense description or vendor name" },
+        "amount": { "type": "number", "description": "Expense amount" },
+        "date": { "type": "string", "format": "date", "description": "Payment date" },
+        "paymentMethod": { "type": "string", "description": "Payment method used" },
+        "vendorName": { "type": "string", "description": "Vendor or payee" },
+        "invoiceNumber": { "type": "string", "description": "Vendor invoice number" },
+        "notes": { "type": "string", "description": "Additional notes" },
+        "recordedBy": { "type": "string", "description": "Staff member name" },
+        "recordedAt": { "type": "string", "format": "date-time", "description": "Record timestamp" }
+      },
+      "required": ["id", "gymId", "ownerId", "category", "amount", "date"]
+    },
+    "AttendanceRecord": {
+      "title": "Attendance Check-In Record",
+      "description": "Daily visit log for a gym member.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique check-in record ID" },
+        "gymId": { "type": "string", "description": "Associated Gym ID" },
+        "ownerId": { "type": "string", "description": "Owner UID" },
+        "memberId": { "type": "string", "description": "Member ID" },
+        "memberName": { "type": "string", "description": "Member name" },
+        "date": { "type": "string", "format": "date", "description": "Visit date (YYYY-MM-DD)" },
+        "checkInTime": { "type": "string", "description": "Check-in time (e.g. 07:15 AM)" },
+        "checkOutTime": { "type": "string", "description": "Optional check-out time" },
+        "method": { "type": "string", "enum": ["QR_Scan", "Manual", "Biometric"] },
+        "notes": { "type": "string", "description": "Check-in notes" }
+      },
+      "required": ["id", "gymId", "ownerId", "memberId", "date", "checkInTime"]
+    },
+    "Lead": {
+      "title": "Gym Prospective Lead",
+      "description": "Potential customer lead inquiring about membership.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique lead identifier" },
+        "gymId": { "type": "string", "description": "Associated Gym ID" },
+        "ownerId": { "type": "string", "description": "Owner UID" },
+        "name": { "type": "string", "description": "Prospective member name" },
+        "phone": { "type": "string", "description": "Contact phone" },
+        "email": { "type": "string", "description": "Email address" },
+        "status": { "type": "string", "enum": ["new", "contacted", "trial_booked", "trial_completed", "negotiation", "converted", "lost"] },
+        "source": { "type": "string", "description": "Lead source (Walk-in, Instagram, Referral, etc.)" },
+        "interestedPlan": { "type": "string", "description": "Plan or goal of interest" },
+        "notes": { "type": "string", "description": "Staff enquiry notes" },
+        "nextFollowUpDate": { "type": "string", "description": "Scheduled next contact date" },
+        "assignedStaffId": { "type": "string", "description": "Assigned staff ID" },
+        "assignedStaffName": { "type": "string", "description": "Assigned staff name" },
+        "createdAt": { "type": "string", "format": "date", "description": "Creation date" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last update" }
+      },
+      "required": ["id", "gymId", "ownerId", "name", "phone", "status"]
+    },
+    "FollowUpTask": {
+      "title": "Follow Up Task",
+      "description": "Actionable task for member retention or lead conversion.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique task ID" },
+        "gymId": { "type": "string", "description": "Associated Gym ID" },
+        "ownerId": { "type": "string", "description": "Owner UID" },
+        "leadId": { "type": "string", "description": "Associated lead ID if applicable" },
+        "memberId": { "type": "string", "description": "Associated member ID if applicable" },
+        "personName": { "type": "string", "description": "Name of contact" },
+        "personPhone": { "type": "string", "description": "Phone of contact" },
+        "reason": { "type": "string", "description": "Task reason" },
+        "dueDate": { "type": "string", "format": "date", "description": "Task due date" },
+        "status": { "type": "string", "enum": ["pending", "completed", "cancelled"] },
+        "notes": { "type": "string", "description": "Call/interaction notes" },
+        "outcome": { "type": "string", "description": "Outcome after completion" },
+        "assignedStaffName": { "type": "string", "description": "Staff member" },
+        "createdAt": { "type": "string", "description": "Creation timestamp" }
+      },
+      "required": ["id", "gymId", "ownerId", "personName", "reason", "dueDate", "status"]
+    },
+    "StaffMember": {
+      "title": "Gym Staff Member",
+      "description": "Gym employee, trainer, manager, or receptionist.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique staff ID" },
+        "gymId": { "type": "string", "description": "Associated Gym ID" },
+        "ownerId": { "type": "string", "description": "Owner UID" },
+        "name": { "type": "string", "description": "Staff member full name" },
+        "phone": { "type": "string", "description": "Staff phone number" },
+        "email": { "type": "string", "description": "Staff email" },
+        "role": { "type": "string", "enum": ["Management", "Reception", "Trainer", "Housekeeping", "Owner"] },
+        "status": { "type": "string", "enum": ["active", "inactive"] },
+        "joiningDate": { "type": "string", "format": "date", "description": "Joining date" },
+        "salary": { "type": "number", "description": "Monthly base salary" },
+        "assignedShift": { "type": "string", "description": "Shift description" },
+        "emergencyContact": { "type": "string", "description": "Emergency contact" }
+      },
+      "required": ["id", "gymId", "ownerId", "name", "phone", "role", "status"]
+    },
+    "ComplaintRecord": {
+      "title": "Member Complaint or Feedback",
+      "description": "Equipment breakdown, maintenance issue, or cleanliness ticket.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique complaint ID" },
+        "gymId": { "type": "string", "description": "Associated Gym ID" },
+        "ownerId": { "type": "string", "description": "Owner UID" },
+        "memberId": { "type": "string", "description": "Reporting member ID" },
+        "memberName": { "type": "string", "description": "Reporting member name" },
+        "category": { "type": "string", "description": "Category (Equipment, Cleanliness, Staff, Facility, Billing, Other)" },
+        "title": { "type": "string", "description": "Complaint title" },
+        "description": { "type": "string", "description": "Complaint details" },
+        "status": { "type": "string", "enum": ["open", "in_progress", "resolved"] },
+        "createdAt": { "type": "string", "description": "Log timestamp" }
+      },
+      "required": ["id", "gymId", "ownerId", "title", "status"]
+    },
+    "GymNotification": {
+      "title": "Gym In-App Notification",
+      "description": "Operational event notification for renewals, dues, and follow-ups.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Notification ID" },
+        "gymId": { "type": "string", "description": "Associated Gym ID" },
+        "ownerId": { "type": "string", "description": "Owner UID" },
+        "title": { "type": "string", "description": "Notification title" },
+        "message": { "type": "string", "description": "Message copy" },
+        "category": { "type": "string", "description": "Notification category" },
+        "priority": { "type": "string", "enum": ["high", "medium", "low"] },
+        "timestamp": { "type": "string", "description": "Date or time string" },
+        "isRead": { "type": "boolean", "description": "Read flag" }
+      },
+      "required": ["id", "gymId", "ownerId", "title", "isRead"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profile with role, email, and gym association"
+    },
+    "/gyms/{gymId}": {
+      "schema": { "$ref": "#/entities/Gym" },
+      "description": "Gym business document owned by the creator"
+    },
+    "/gyms/{gymId}/settings/{settingId}": {
+      "schema": { "$ref": "#/entities/GymSettings" },
+      "description": "Operational configuration for the gym"
+    },
+    "/gyms/{gymId}/onboarding/{onboardingId}": {
+      "schema": { "$ref": "#/entities/OnboardingPreferences" },
+      "description": "Onboarding progress and answers"
+    },
+    "/gyms/{gymId}/members/{memberId}": {
+      "schema": { "$ref": "#/entities/Member" },
+      "description": "Active and past gym members"
+    },
+    "/gyms/{gymId}/plans/{planId}": {
+      "schema": { "$ref": "#/entities/MembershipPlan" },
+      "description": "Membership packages and pricing"
+    },
+    "/gyms/{gymId}/payments/{paymentId}": {
+      "schema": { "$ref": "#/entities/Payment" },
+      "description": "Payments and receipts"
+    },
+    "/gyms/{gymId}/expenses/{expenseId}": {
+      "schema": { "$ref": "#/entities/Expense" },
+      "description": "Gym operating expenses"
+    },
+    "/gyms/{gymId}/attendance/{recordId}": {
+      "schema": { "$ref": "#/entities/AttendanceRecord" },
+      "description": "Member check-in records"
+    },
+    "/gyms/{gymId}/leads/{leadId}": {
+      "schema": { "$ref": "#/entities/Lead" },
+      "description": "Prospective leads and trial inquiries"
+    },
+    "/gyms/{gymId}/followUpTasks/{taskId}": {
+      "schema": { "$ref": "#/entities/FollowUpTask" },
+      "description": "Actionable follow-up tasks"
+    },
+    "/gyms/{gymId}/staff/{staffId}": {
+      "schema": { "$ref": "#/entities/StaffMember" },
+      "description": "Gym staff records"
+    },
+    "/gyms/{gymId}/complaints/{complaintId}": {
+      "schema": { "$ref": "#/entities/ComplaintRecord" },
+      "description": "Maintenance and feedback tickets"
+    },
+    "/gyms/{gymId}/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/GymNotification" },
+      "description": "Gym notifications"
+    }
+  }
+}

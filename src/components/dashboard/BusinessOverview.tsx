@@ -207,7 +207,7 @@ export const BusinessOverview: React.FC<BusinessOverviewProps> = ({
                 </>
               ) : (
                 <span className="text-[#15803D] font-semibold">
-                  {state.payments.filter((p) => p.status !== 'refunded' && p.amount > 0).length} collected
+                  {state.payments.filter((p) => p.status !== 'refunded' && p.status !== 'pending' && p.status !== 'overdue' && p.amount > 0).length} collected
                 </span>
               )}
             </div>

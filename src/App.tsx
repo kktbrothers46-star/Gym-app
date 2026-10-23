@@ -16,7 +16,7 @@ import { BottomNav, NavTab } from './components/dashboard/BottomNav';
 import { MembersScreen } from './components/members/MembersScreen';
 import { MembershipPlansScreen } from './components/plans/MembershipPlansScreen';
 import { RenewalsScreen } from './components/renewals/RenewalsScreen';
-import { PaymentsScreen } from './components/payments/PaymentsScreen';
+import { PaymentsScreen, PaymentsViewMode } from './components/payments/PaymentsScreen';
 import { ExpensesScreen } from './components/expenses/ExpensesScreen';
 import { LeadsScreen } from './components/leads/LeadsScreen';
 import { FollowUpsScreen } from './components/followups/FollowUpsScreen';
@@ -44,7 +44,17 @@ import { SearchModal } from './components/modals/SearchModal';
 import { NotificationsModal } from './components/modals/NotificationsModal';
 import { ReportsModal } from './components/modals/ReportsModal';
 import { RenewMembershipModal } from './components/modals/RenewMembershipModal';
+import { ImportMembersModal } from './components/modals/ImportMembersModal';
 import { AlertCircle, RefreshCw } from 'lucide-react';
+import { AuthScreen } from './components/auth/AuthScreen';
+import {
+  auth,
+  testFirebaseConnection,
+  signOut,
+  onAuthStateChanged,
+  FirebaseUser,
+} from './lib/firebase';
+import { loadGymFromFirestore } from './lib/firestoreSync';
 
 export default function App() {
   const {
@@ -92,18 +102,24 @@ export default function App() {
     dismissNotification,
     saveOnboardingProgress,
     completeOnboarding,
-    resetOnboarding,
-    toggleEmptyState,
-    resetToDefault,
+    setFullGymStore,
+    addPaymentPromise,
+    updatePaymentPromise,
+    cancelPaymentPromise,
+    completePaymentPromise,
+    saveCashReconciliation,
+    importMembersBatch,
   } = useGymStore();
 
-  // App Screen: starts as 'splash' on reload/initial mount, then routes to 'onboarding' (first time) or 'dashboard'
-  const [currentScreen, setCurrentScreen] = useState<'splash' | 'onboarding' | 'dashboard'>(
-    'splash'
-  );
+  // Screen Flow: splash -> roles -> auth -> onboarding -> dashboard
+  const [currentScreen, setCurrentScreen] = useState<
+    'splash' | 'roles' | 'auth' | 'onboarding' | 'dashboard'
+  >('splash');
+  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
+  const [authInitialMode, setAuthInitialMode] = useState<'signup' | 'login'>('signup');
   const [activeTab, setActiveTab] = useState<NavTab>('home');
   const [membersView, setMembersView] = useState<'leads' | 'followups' | 'renewals' | 'directory'>(
-    'leads'
+    'directory'
   );
   const [paymentsView, setPaymentsView] = useState<'payments' | 'expenses'>('payments');
   const [reportsView, setReportsView] = useState<ReportTabType>('overview');
@@ -126,22 +142,83 @@ export default function App() {
   const [isReportsOpen, setIsReportsOpen] = useState(false);
   const [isRenewModalOpen, setIsRenewModalOpen] = useState(false);
   const [renewingMemberId, setRenewingMemberId] = useState<string | null>(null);
-
-  // Automatic 1.2-second splash screen display on reload, then route to onboarding if not completed
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (!state.onboarding?.hasCompletedOnboarding) {
-        setCurrentScreen('onboarding');
-      } else {
-        setCurrentScreen('dashboard');
-      }
-    }, 1200);
-    return () => clearTimeout(timer);
-  }, []);
+  const [isImportMembersOpen, setIsImportMembersOpen] = useState(false);
+  const [paymentsInitialViewMode, setPaymentsInitialViewMode] =
+    useState<PaymentsViewMode>('transactions');
+  const [attendanceInitialTab, setAttendanceInitialTab] = useState<
+    'all' | 'present' | 'absent' | 'inactive'
+  >('all');
 
   // Simulation states for testing acceptance criteria
   const [isSimulatedLoading, setIsSimulatedLoading] = useState(false);
   const [simulatedError, setSimulatedError] = useState<string | null>(null);
+
+  // Firebase Auth & Live Cloud Firestore Synchronization
+  useEffect(() => {
+    testFirebaseConnection();
+
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        setCurrentUser(user);
+        try {
+          const firestoreData = await loadGymFromFirestore(
+            user.uid,
+            user.email,
+            user.displayName
+          );
+
+          setFullGymStore({
+            gym: firestoreData.gym,
+            settings: firestoreData.settings,
+            onboarding: firestoreData.onboarding,
+            members: firestoreData.members,
+            plans: firestoreData.plans,
+            payments: firestoreData.payments,
+            renewals: firestoreData.renewals,
+            expenses: firestoreData.expenses,
+            attendance: firestoreData.attendance,
+            leads: firestoreData.leads,
+            followUpTasks: firestoreData.followUpTasks,
+            staff: firestoreData.staff,
+            complaints: firestoreData.complaints,
+            notifications: firestoreData.notifications,
+            isEmptyState: false,
+          });
+
+          // Route according to onboarding status
+          if (firestoreData.onboarding?.hasCompletedOnboarding) {
+            setCurrentScreen('dashboard');
+          } else {
+            setCurrentScreen('onboarding');
+          }
+        } catch (err) {
+          console.error('Failed to load gym from Firestore on auth change:', err);
+          if (state.onboarding?.hasCompletedOnboarding) {
+            setCurrentScreen('dashboard');
+          } else {
+            setCurrentScreen('onboarding');
+          }
+        }
+      } else {
+        setCurrentUser(null);
+        // If unauthenticated, ensure protected dashboard is not active
+        setCurrentScreen((prev) => (prev === 'dashboard' ? 'roles' : prev));
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      setCurrentUser(null);
+      setCurrentScreen('roles');
+      setActiveTab('home');
+    } catch (err) {
+      console.error('Logout error:', err);
+    }
+  };
 
   // Handle bottom navigation tab clicks
   const handleTabChange = (tab: NavTab) => {
@@ -194,10 +271,11 @@ export default function App() {
       setActiveTab('members');
     } else if (filter === 'overdue') {
       setPaymentsView('payments');
+      setPaymentsInitialViewMode('pending_dues');
       setActiveTab('payments');
     } else if (filter === 'inactive') {
-      setMembersView('followups');
-      setActiveTab('members');
+      setAttendanceInitialTab('inactive');
+      setActiveTab('attendance');
     } else {
       setMembersView('directory');
       setActiveTab('members');
@@ -214,22 +292,94 @@ export default function App() {
     setIsRenewModalOpen(true);
   };
 
-  // If viewing the splash screen, render it directly
+  // 1. Splash Screen
   if (currentScreen === 'splash') {
     return (
       <SplashScreen
         onEnterDashboard={() => {
-          if (!state.onboarding?.hasCompletedOnboarding) {
-            setCurrentScreen('onboarding');
+          if (currentUser) {
+            if (state.onboarding?.hasCompletedOnboarding) {
+              setCurrentScreen('dashboard');
+            } else {
+              setCurrentScreen('onboarding');
+            }
           } else {
-            setCurrentScreen('dashboard');
+            setCurrentScreen('roles');
           }
         }}
       />
     );
   }
 
-  // If viewing the Duolingo-style one-question-per-screen onboarding flow
+  // 2. Role Selection (Owner vs Member, with Member Coming Soon)
+  if (currentScreen === 'roles') {
+    return (
+      <OnboardingScreen
+        gym={state.gym}
+        settings={state.settings || INITIAL_SETTINGS}
+        plans={state.plans}
+        onboarding={{ ...state.onboarding, selectedRole: null }}
+        isEmptyState={state.isEmptyState}
+        initialStep="role"
+        onRoleSelectedOwner={() => {
+          setAuthInitialMode('signup');
+          setCurrentScreen('auth');
+        }}
+        onSaveProgress={saveOnboardingProgress}
+        onCompleteOnboarding={() => {}}
+        onBackToSplash={() => setCurrentScreen('splash')}
+      />
+    );
+  }
+
+  // 3. Owner Authentication (Sign Up & Login)
+  if (currentScreen === 'auth') {
+    return (
+      <AuthScreen
+        initialMode={authInitialMode}
+        onAuthSuccess={async (authUser) => {
+          try {
+            const firestoreData = await loadGymFromFirestore(
+              authUser.uid,
+              authUser.email,
+              authUser.displayName,
+              authUser.gymName
+            );
+
+            setFullGymStore({
+              gym: firestoreData.gym,
+              settings: firestoreData.settings,
+              onboarding: firestoreData.onboarding,
+              members: firestoreData.members,
+              plans: firestoreData.plans,
+              payments: firestoreData.payments,
+              renewals: firestoreData.renewals,
+              expenses: firestoreData.expenses,
+              attendance: firestoreData.attendance,
+              leads: firestoreData.leads,
+              followUpTasks: firestoreData.followUpTasks,
+              staff: firestoreData.staff,
+              complaints: firestoreData.complaints,
+              notifications: firestoreData.notifications,
+              isEmptyState: false,
+            });
+
+            if (firestoreData.onboarding?.hasCompletedOnboarding) {
+              setCurrentScreen('dashboard');
+            } else {
+              setCurrentScreen('onboarding');
+            }
+          } catch (err) {
+            console.error('Error hydrating store after auth:', err);
+            setCurrentScreen('onboarding');
+          }
+        }}
+        onBackToRoles={() => setCurrentScreen('roles')}
+      />
+    );
+  }
+
+  // 4. Owner Onboarding Flow (Duolingo-style 7 question screens + checklist)
   if (currentScreen === 'onboarding') {
     return (
       <OnboardingScreen
@@ -238,6 +388,10 @@ export default function App() {
         plans={state.plans}
         onboarding={state.onboarding || INITIAL_ONBOARDING}
         isEmptyState={state.isEmptyState}
+        membersCount={state.members.length}
+        plansCount={state.plans.length}
+        paymentsCount={state.payments.length}
+        attendanceCount={state.attendance.length}
         onSaveProgress={saveOnboardingProgress}
         onCompleteOnboarding={(payload, nextAction) => {
           completeOnboarding(payload);
@@ -258,7 +412,7 @@ export default function App() {
             setActiveTab('home');
           }
         }}
-        onBackToSplash={() => setCurrentScreen('splash')}
+        onBackToSplash={() => setCurrentScreen('roles')}
       />
     );
   }
@@ -363,6 +517,7 @@ export default function App() {
                   setPreselectedPlanForAddMember({});
                   setIsAddMemberOpen(true);
                 }}
+                onOpenImportMembers={() => setIsImportMembersOpen(true)}
                 onRecordPayment={handleOpenPaymentForMember}
                 onRenewMembership={(memberId) => handleOpenRenewModal(memberId)}
                 onMarkAttendance={markAttendance}
@@ -400,6 +555,7 @@ export default function App() {
               attendance={state.attendance || []}
               activeMembersCount={state.activeMembersCount}
               isEmptyState={state.isEmptyState}
+              initialTab={attendanceInitialTab}
               onMarkAttendance={markAttendance}
               onUnmarkAttendance={unmarkAttendance}
               onRecordPayment={(memberId) => handleOpenPaymentForMember(memberId)}
@@ -430,9 +586,14 @@ export default function App() {
             ) : (
               <PaymentsScreen
                 payments={state.payments}
+                expenses={state.expenses}
                 members={state.members}
+                paymentPromises={state.paymentPromises || []}
+                cashReconciliations={state.cashReconciliations || []}
+                gymName={state.gym?.name || 'MuscleFit Gym'}
                 collectedThisMonth={state.collectedThisMonth}
                 isEmptyState={state.isEmptyState}
+                initialViewMode={paymentsInitialViewMode}
                 onOpenRecordPayment={(memberId) => handleOpenPaymentForMember(memberId)}
                 onOpenRenewModal={(memberId) => handleOpenRenewModal(memberId)}
                 onMarkAttendance={markAttendance}
@@ -441,6 +602,11 @@ export default function App() {
                 onAddFollowUp={addFollowUp}
                 onReversePayment={reversePayment}
                 onSwitchToExpenses={() => setPaymentsView('expenses')}
+                onAddPaymentPromise={addPaymentPromise}
+                onUpdatePaymentPromise={updatePaymentPromise}
+                onCancelPaymentPromise={cancelPaymentPromise}
+                onCompletePaymentPromise={completePaymentPromise}
+                onSaveCashReconciliation={saveCashReconciliation}
               />
             )}
           </main>
@@ -493,6 +659,8 @@ export default function App() {
                     ? 0
                     : (state.notifications || []).filter((n) => !n.isRead).length
                 }
+                userEmail={currentUser?.email || state.gym.email}
+                onLogout={handleLogout}
                 onBack={() => setActiveTab('home')}
                 onSelectReportTab={(t) => setReportsView(t)}
                 onUpdateGymProfile={updateGymProfile}
@@ -762,26 +930,53 @@ export default function App() {
                 setPreselectedPlanForAddMember({});
                 setIsAddMemberOpen(true);
               }}
-              onTakeAttendance={() => setActiveTab('attendance')}
               onRecordPayment={() => {
                 setPaymentPreselectedMemberId(undefined);
                 setIsRecordPaymentOpen(true);
+              }}
+              onRenewMembership={() => {
+                setRenewingMemberId(null);
+                setIsRenewModalOpen(true);
               }}
               onAddExpense={() => {
                 setEditingExpense(null);
                 setIsAddExpenseOpen(true);
               }}
-              onSeeAllActions={() => setActiveTab('plans')}
+              onOpenImportMembers={() => setIsImportMembersOpen(true)}
+              onOpenDailyCollection={() => {
+                setPaymentsView('payments');
+                setPaymentsInitialViewMode('daily_summary');
+                setActiveTab('payments');
+              }}
+              onOpenPaymentPromises={() => {
+                setPaymentsView('payments');
+                setPaymentsInitialViewMode('promises');
+                setActiveTab('payments');
+              }}
             />
 
-            {/* D. Needs Your Attention: Overdue, Expiring, Follow-Ups Due */}
+            {/* D. Needs Your Attention + Feature 5: Consolidated Daily Action List */}
             <AttentionSection
               state={state}
-              onFilterMembers={(filter) => handleOpenMembersFilter(filter)}
-              onSeeAllAttention={() => handleOpenMembersFilter('overdue')}
-              onOpenFollowUps={() => {
-                setMembersView('followups');
-                setActiveTab('members');
+              onSelectCategory={(cat) => {
+                if (cat === 'renewals') {
+                  setMembersView('renewals');
+                  setActiveTab('members');
+                } else if (cat === 'pending_payments') {
+                  setPaymentsView('payments');
+                  setPaymentsInitialViewMode('pending_dues');
+                  setActiveTab('payments');
+                } else if (cat === 'payment_promises') {
+                  setPaymentsView('payments');
+                  setPaymentsInitialViewMode('promises');
+                  setActiveTab('payments');
+                } else if (cat === 'inactive_members') {
+                  setAttendanceInitialTab('inactive');
+                  setActiveTab('attendance');
+                } else if (cat === 'follow_ups') {
+                  setMembersView('followups');
+                  setActiveTab('members');
+                }
               }}
             />
           </main>
@@ -867,6 +1062,14 @@ export default function App() {
           setIsRenewModalOpen(false);
           setRenewingMemberId(null);
         }}
+      />
+
+      <ImportMembersModal
+        isOpen={isImportMembersOpen}
+        onClose={() => setIsImportMembersOpen(false)}
+        existingMembers={state.members}
+        plans={state.plans}
+        onConfirmImport={(rows) => importMembersBatch(rows)}
       />
     </div>
   );

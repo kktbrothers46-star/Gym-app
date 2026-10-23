@@ -278,20 +278,23 @@ export const RenewMembershipModal: React.FC<RenewMembershipModalProps> = ({
             ) : null}
 
             {/* Current Membership Review Box */}
-            <div className="p-2.5 rounded-xl bg-[#FAF8F5] border border-[#EAE5DC] flex items-center justify-between gap-2 text-xs">
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="w-7 h-7 rounded-full bg-[#E0E7FF] text-[#102A71] font-bold text-xs flex items-center justify-center shrink-0">
-                  {activeMember.name.charAt(0)}
+            <div className="p-2.5 rounded-xl bg-[#FAF8F5] border border-[#EAE5DC] flex items-start justify-between gap-2.5 text-xs">
+              <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                <div className="w-8 h-8 rounded-full bg-[#E0E7FF] text-[#102A71] font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">
+                  {activeMember.name.charAt(0).toUpperCase()}
                 </div>
-                <div className="min-w-0">
-                  <div className="font-bold text-[#191919] truncate leading-tight">
-                    {activeMember.name}{' '}
-                    <span className="text-[10.5px] font-normal text-[#71717A]">
-                      ({activeMember.memberCode || activeMember.id})
-                    </span>
+                <div className="min-w-0 flex-1">
+                  <div className="font-bold text-[13.5px] sm:text-[14px] text-[#191919] leading-snug break-normal">
+                    {activeMember.name}
                   </div>
-                  <div className="text-[10.5px] text-[#71717A] truncate mt-0.5">
-                    Current: <span className="font-semibold text-[#191919]">{activeMember.membershipPlan}</span>
+                  <div className="text-[11px] text-[#71717A] mt-0.5 flex items-center gap-1.5 flex-wrap">
+                    <span className="bg-[#EAE5DC] text-[#4B5563] px-1.5 py-0.5 rounded text-[10px] font-medium leading-none">
+                      {activeMember.memberCode || activeMember.id}
+                    </span>
+                    <span className="text-[#D1D5DB]">•</span>
+                    <span>
+                      Current: <strong className="text-[#191919] font-semibold">{activeMember.membershipPlan}</strong>
+                    </span>
                   </div>
                 </div>
               </div>

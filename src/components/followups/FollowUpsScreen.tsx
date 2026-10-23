@@ -30,6 +30,11 @@ import {
   Member,
 } from '../../types/dashboard';
 import { MemberDetailView } from '../members/MemberDetailView';
+import {
+  WhatsAppFollowUpModal,
+  WhatsAppFollowUpTarget,
+  WhatsAppTemplateCategory,
+} from '../modals/WhatsAppFollowUpModal';
 
 interface FollowUpsScreenProps {
   followUpTasks: FollowUpTask[];
@@ -175,6 +180,8 @@ export const FollowUpsScreen: React.FC<FollowUpsScreenProps> = ({
   const [schedulePriority, setSchedulePriority] = useState<'High' | 'Medium' | 'Low'>('Medium');
   const [scheduleError, setScheduleError] = useState<string | null>(null);
   const [isScheduleSaving, setIsScheduleSaving] = useState(false);
+  const [whatsAppTarget, setWhatsAppTarget] = useState<WhatsAppFollowUpTarget | null>(null);
+  const [activeWhatsAppTaskId, setActiveWhatsAppTaskId] = useState<string | null>(null);
 
   // Task Detail / Complete / Reschedule Modal State
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
@@ -613,16 +620,16 @@ export const FollowUpsScreen: React.FC<FollowUpsScreenProps> = ({
       </div>
 
       {/* ============================================================== */}
-      {/* D. STATUS FILTER CHIPS                                         */}
+      {/* D. STATUS FILTER CHIPS (Overdue, Today, Upcoming, Completed, All) */}
       {/* ============================================================== */}
       <div className="mt-3 flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none snap-x">
         {(
           [
-            { id: 'All', label: 'All', dotColor: null },
-            { id: 'Today', label: 'Today', dotColor: '#EF4444' },
-            { id: 'Overdue', label: 'Overdue', dotColor: '#F59E0B' },
+            { id: 'Overdue', label: 'Overdue', dotColor: '#EF4444' },
+            { id: 'Today', label: 'Today', dotColor: '#F59E0B' },
             { id: 'Upcoming', label: 'Upcoming', dotColor: '#2563EB' },
             { id: 'Completed', label: 'Completed', dotColor: '#16A34A' },
+            { id: 'All', label: 'All', dotColor: null },
           ] as const
         ).map((tab) => {
           const isSelected = selectedStatusTab === tab.id;
@@ -760,112 +767,221 @@ export const FollowUpsScreen: React.FC<FollowUpsScreenProps> = ({
             return (
               <div
                 key={task.id}
-                onClick={() => {
-                  setSelectedTaskId(task.id);
-                  setActionMode('view');
-                  setOutcomeNoteInput(task.outcomeNote || '');
-                  setScheduleNextAfterComplete(false);
-                  setRescheduleDateInput(task.dueDate || getDaysAheadIso(1));
-                  setRescheduleTimeInput(task.dueTime || '10:00 AM');
-                  setRescheduleNoteInput(task.note || '');
-                  setTaskActionError(null);
-                }}
-                className="bg-white rounded-xl sm:rounded-2xl border border-[#EAE5DC] p-2.5 sm:p-3 flex items-center justify-between gap-2 shadow-2xs hover:shadow-xs hover:border-[#D5CFC2] transition-all cursor-pointer group"
-                role="button"
-                tabIndex={0}
-                aria-label={`Open follow-up task for ${task.personName}`}
+                className="bg-white rounded-xl sm:rounded-2xl border border-[#EAE5DC] p-3 sm:p-3.5 shadow-2xs hover:shadow-xs hover:border-[#D5CFC2] transition-all space-y-2.5"
               >
-                {/* Left Column: Avatar + Name + PersonType·Reason + Note */}
-                <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                  {task.personPhotoUrl ? (
-                    <img
-                      src={task.personPhotoUrl}
-                      alt={task.personName}
-                      className="w-10 h-10 sm:w-11 sm:h-11 rounded-full object-cover border border-[#EAE5DC] shrink-0"
-                    />
-                  ) : (
-                    <div
-                      className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full font-bold text-xs sm:text-sm flex items-center justify-center border shrink-0 ${getAvatarColorStyle(
-                        task.personName
-                      )}`}
-                    >
-                      {getInitials(task.personName)}
-                    </div>
-                  )}
+                {/* Row 1: Avatar + Name + Phone + Urgency Badge + Accessible Call & WhatsApp */}
+                <div className="flex items-start justify-between gap-2">
+                  <div
+                    onClick={() => {
+                      setSelectedTaskId(task.id);
+                      setActionMode('view');
+                      setOutcomeNoteInput(task.outcomeNote || '');
+                      setScheduleNextAfterComplete(false);
+                      setRescheduleDateInput(task.dueDate || getDaysAheadIso(1));
+                      setRescheduleTimeInput(task.dueTime || '10:00 AM');
+                      setRescheduleNoteInput(task.note || '');
+                      setTaskActionError(null);
+                    }}
+                    className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer"
+                  >
+                    {task.personPhotoUrl ? (
+                      <img
+                        src={task.personPhotoUrl}
+                        alt={task.personName}
+                        className="w-10 h-10 rounded-full object-cover border border-[#EAE5DC] shrink-0"
+                      />
+                    ) : (
+                      <div
+                        className={`w-10 h-10 rounded-full font-bold text-xs flex items-center justify-center border shrink-0 ${getAvatarColorStyle(
+                          task.personName
+                        )}`}
+                      >
+                        {getInitials(task.personName)}
+                      </div>
+                    )}
 
-                  <div className="min-w-0 flex-1">
-                    <h3 className="font-bold text-[13.5px] sm:text-[14px] text-[#191919] truncate leading-tight group-hover:text-[#102A71] transition-colors">
-                      {task.personName}
-                    </h3>
-                    <p className="text-[11px] sm:text-[11.5px] text-[#4B5563] font-medium mt-0.5 leading-none truncate">
-                      {task.personType} · {task.reason}
-                    </p>
-                    <p className="text-[10.5px] text-[#71717A] mt-1 leading-none truncate">
-                      {task.note}
-                    </p>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <h3 className="font-bold text-[14px] sm:text-[15px] text-[#191919] truncate leading-tight hover:text-[#102A71] transition-colors">
+                          {task.personName}
+                        </h3>
+                        <span className="text-[10px] font-semibold text-[#71717A] bg-[#F4F1EA] px-1.5 py-0.5 rounded leading-none">
+                          {task.personType}
+                        </span>
+                      </div>
+                      <p className="text-[12px] font-semibold text-[#1E3A8A] mt-0.5 leading-tight">
+                        +91 {task.personPhone}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Accessible Call & WhatsApp Actions */}
+                  <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
+                    {cleanPhone.length >= 10 && (
+                      <>
+                        <a
+                          href={`tel:${cleanPhone}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-8 h-8 rounded-xl bg-[#EEF5FF] hover:bg-[#DBEAFE] text-[#2563EB] flex items-center justify-center transition-all shadow-2xs"
+                          aria-label={`Call ${task.personName}`}
+                          title={`Call +91 ${task.personPhone}`}
+                        >
+                          <Phone className="w-3.5 h-3.5 fill-current" />
+                        </a>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const rLower = (task.reason || '').toLowerCase();
+                            let tpl: WhatsAppTemplateCategory =
+                              task.personType === 'Lead' ? 'lead' : 'renewal';
+                            if (rLower.includes('payment') || rLower.includes('due')) {
+                              tpl = 'payment';
+                            } else if (rLower.includes('inactive')) {
+                              tpl = 'inactive';
+                            } else if (rLower.includes('enquir') || rLower.includes('trial') || task.personType === 'Lead') {
+                              tpl = 'lead';
+                            }
+                            const memberObj =
+                              task.personType === 'Member'
+                                ? effectiveMembers.find((m) => m.id === task.personId)
+                                : undefined;
+                            const leadObj =
+                              task.personType === 'Lead'
+                                ? effectiveLeads.find((l) => l.id === task.personId)
+                                : undefined;
+                            setActiveWhatsAppTaskId(task.id);
+                            setWhatsAppTarget({
+                              personType: task.personType,
+                              personId: task.personId,
+                              name: task.personName,
+                              phone: task.personPhone,
+                              defaultCategory: tpl,
+                              followUpTaskId: task.id,
+                              planName:
+                                task.relatedPlan ||
+                                memberObj?.membershipPlan ||
+                                leadObj?.interestedPlan,
+                              expiryDate: memberObj?.expiryDate,
+                              daysUntilExpiry: memberObj?.daysUntilExpiry,
+                              pendingAmount: memberObj?.pendingAmount,
+                              lastVisitDate: memberObj?.lastVisitDate,
+                              daysSinceLastVisit: memberObj?.daysSinceLastVisit,
+                            });
+                          }}
+                          className="w-8 h-8 rounded-xl bg-[#22C55E] hover:bg-[#16A34A] text-white flex items-center justify-center transition-all shadow-2xs cursor-pointer"
+                          aria-label={`WhatsApp ${task.personName}`}
+                          title={`WhatsApp +91 ${task.personPhone}`}
+                        >
+                          <MessageCircle className="w-3.5 h-3.5 fill-current" />
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
 
-                {/* Middle Column: Urgency Status Badge + Scheduled Date & Time */}
-                <div className="border-l border-[#F0ECE3] pl-2 sm:pl-2.5 flex flex-col items-start justify-center shrink-0 min-w-[92px] sm:min-w-[108px]">
-                  {urgency === 'Overdue' ? (
-                    <span className="inline-block px-2 py-0.5 rounded-full text-[9.5px] sm:text-[10px] font-bold bg-[#FEE2E2] text-[#DC2626] leading-tight">
-                      Overdue
+                {/* Row 2: Urgency Badge + Reason + Scheduled Due Date + Note */}
+                <div className="flex items-center justify-between gap-2 flex-wrap pt-2 border-t border-[#F2EFE8] text-[11px]">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span
+                      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold border ${
+                        urgency === 'Overdue'
+                          ? 'bg-[#FEE2E2] text-[#DC2626] border-[#FECACA]'
+                          : urgency === 'Due Today'
+                          ? 'bg-[#FEF3C7] text-[#B45309] border-[#FDE68A]'
+                          : urgency === 'Upcoming'
+                          ? 'bg-[#EFF6FF] text-[#1D4ED8] border-[#BFDBFE]'
+                          : 'bg-[#DCFCE7] text-[#15803D] border-[#BBF7D0]'
+                      }`}
+                    >
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          urgency === 'Overdue'
+                            ? 'bg-[#DC2626]'
+                            : urgency === 'Due Today'
+                            ? 'bg-[#D97706]'
+                            : urgency === 'Upcoming'
+                            ? 'bg-[#2563EB]'
+                            : 'bg-[#16A34A]'
+                        }`}
+                      />
+                      <span>{urgency}</span>
                     </span>
-                  ) : urgency === 'Due Today' ? (
-                    <span className="inline-block px-2 py-0.5 rounded-full text-[9.5px] sm:text-[10px] font-bold bg-[#FEF3C7] text-[#B45309] leading-tight">
-                      Due Today
-                    </span>
-                  ) : urgency === 'Upcoming' ? (
-                    <span className="inline-block px-2 py-0.5 rounded-full text-[9.5px] sm:text-[10px] font-bold bg-[#DBEAFE] text-[#2563EB] leading-tight">
-                      Upcoming
-                    </span>
-                  ) : (
-                    <span className="inline-block px-2 py-0.5 rounded-full text-[9.5px] sm:text-[10px] font-bold bg-[#E8F8EE] text-[#15803D] leading-tight">
-                      Completed
-                    </span>
-                  )}
 
-                  <span className="text-[10.5px] sm:text-[11px] font-medium text-[#4B5563] mt-1 block leading-tight whitespace-nowrap">
-                    {formattedDueDate}
-                  </span>
-                  <span className="text-[9.5px] sm:text-[10px] text-[#71717A] mt-0.5 block leading-none whitespace-nowrap">
-                    {task.dueTime || '10:00 AM'}
+                    <span className="px-2 py-0.5 rounded-md bg-[#FAF8F5] border border-[#EAE5DC] text-[10.5px] font-medium text-[#52525B]">
+                      {task.reason}
+                    </span>
+
+                    {task.assignedStaff && (
+                      <span className="text-[10.5px] text-[#71717A]">
+                        Assigned: {task.assignedStaff}
+                      </span>
+                    )}
+                  </div>
+
+                  <span className="text-[11px] font-semibold text-[#191919] flex items-center gap-1">
+                    <Clock className="w-3 h-3 text-[#71717A]" />
+                    <span>{formattedDueDate}{task.dueTime ? `, ${task.dueTime}` : ''}</span>
                   </span>
                 </div>
 
-                {/* Right Column: Call + WhatsApp + Chevron */}
-                <div className="border-l border-[#F0ECE3] pl-2 flex items-center gap-1.5 shrink-0">
-                  {cleanPhone.length >= 10 && (
-                    <>
-                      <a
-                        href={`tel:${cleanPhone}`}
-                        onClick={(e) => e.stopPropagation()}
-                        className="w-7.5 h-7.5 sm:w-8 sm:h-8 rounded-full bg-[#EEF5FF] hover:bg-[#DBEAFE] text-[#2563EB] flex items-center justify-center transition-colors"
-                        aria-label={`Call ${task.personName}`}
-                        title={`Call +91 ${task.personPhone}`}
-                      >
-                        <Phone className="w-3.5 h-3.5 fill-current" />
-                      </a>
+                {/* Note Preview */}
+                {task.note && (
+                  <p className="text-[11px] text-[#4B5563] bg-[#FAF8F5] px-2.5 py-1.5 rounded-lg border border-[#F2EFE8] leading-relaxed">
+                    {task.note}
+                  </p>
+                )}
 
-                      <a
-                        href={`https://wa.me/91${cleanPhone}?text=Hi%20${encodeURIComponent(
-                          task.personName
-                        )},%20following%20up%20from%20MuscleFit%20Gym%20regarding%20${encodeURIComponent(
-                          task.reason.toLowerCase()
-                        )}.`}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="w-7.5 h-7.5 sm:w-8 sm:h-8 rounded-full bg-[#22C55E] hover:bg-[#16A34A] text-white flex items-center justify-center transition-colors shadow-2xs"
-                        aria-label={`WhatsApp ${task.personName}`}
-                        title={`WhatsApp +91 ${task.personPhone}`}
-                      >
-                        <MessageCircle className="w-3.5 h-3.5 fill-current" />
-                      </a>
-                    </>
-                  )}
-                  <ChevronRight className="w-3.5 h-3.5 text-[#9CA3AF] group-hover:text-[#191919] shrink-0" />
+                {/* Row 3: Direct 1-Tap Quick Action Buttons */}
+                <div className="flex items-center justify-between gap-2 pt-1 border-t border-[#F8F6F0]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedTaskId(task.id);
+                      setActionMode('view');
+                    }}
+                    className="text-[11.5px] font-semibold text-[#102A71] hover:underline cursor-pointer flex items-center gap-1"
+                  >
+                    <span>View Task History</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+
+                  <div className="flex items-center gap-1.5">
+                    {task.status !== 'completed' ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedTaskId(task.id);
+                            setActionMode('reschedule');
+                            setRescheduleDateInput(task.dueDate || getDaysAheadIso(1));
+                            setRescheduleTimeInput(task.dueTime || '10:00 AM');
+                            setRescheduleNoteInput(task.note || '');
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-[#FAF8F5] border border-[#EAE5DC] hover:bg-[#F2EFE8] text-[11px] font-bold text-[#191919] cursor-pointer"
+                        >
+                          Reschedule
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onCompleteFollowUp(task.id, 'Completed contact');
+                            showToast(`Marked follow-up with ${task.personName} as complete.`);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-[#15803D] hover:bg-[#166534] active:scale-95 text-white text-[11px] font-bold cursor-pointer shadow-2xs flex items-center gap-1"
+                        >
+                          <Check className="w-3 h-3 stroke-[2.8]" />
+                          <span>Complete</span>
+                        </button>
+                      </>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#15803D]">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Completed</span>
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             );
@@ -1518,6 +1634,33 @@ export const FollowUpsScreen: React.FC<FollowUpsScreenProps> = ({
           </div>
         </div>
       )}
+
+      {/* One-Tap WhatsApp Follow-Up Modal */}
+      <WhatsAppFollowUpModal
+        isOpen={Boolean(whatsAppTarget)}
+        target={whatsAppTarget}
+        onClose={() => {
+          setWhatsAppTarget(null);
+          setActiveWhatsAppTaskId(null);
+        }}
+        onConfirmSent={(payload) => {
+          if (activeWhatsAppTaskId) {
+            onCompleteFollowUp(
+              activeWhatsAppTaskId,
+              `WhatsApp follow-up sent: "${payload.messageText.slice(0, 80)}${payload.messageText.length > 80 ? '...' : ''}"`
+            );
+          }
+          if (payload.personType === 'Member' && onAddFollowUp) {
+            onAddFollowUp(payload.personId, {
+              type: 'WhatsApp',
+              note: `WhatsApp follow-up confirmed sent: "${payload.messageText.slice(0, 80)}${payload.messageText.length > 80 ? '...' : ''}"`,
+            });
+          }
+          showToast(`Marked follow-up as completed.`);
+          setWhatsAppTarget(null);
+          setActiveWhatsAppTaskId(null);
+        }}
+      />
     </div>
   );
 };

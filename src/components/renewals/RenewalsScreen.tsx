@@ -23,12 +23,25 @@ import {
 } from 'lucide-react';
 import { Member, RenewalRecord } from '../../types/dashboard';
 import { MemberDetailView } from '../members/MemberDetailView';
+import {
+  WhatsAppFollowUpModal,
+  WhatsAppFollowUpTarget,
+} from '../modals/WhatsAppFollowUpModal';
 
 interface RenewalsScreenProps {
   members: Member[];
   renewals: RenewalRecord[];
+  gymName?: string;
+  upiId?: string;
   isEmptyState?: boolean;
-  initialFilterTab?: 'all' | 'expiring' | 'expired' | 'renewed';
+  initialFilterTab?:
+    | 'all'
+    | 'today'
+    | 'within_3d'
+    | 'within_7d'
+    | 'expiring'
+    | 'expired'
+    | 'renewed';
   onOpenRenewModal: (memberId?: string) => void;
   onRecordPayment: (memberId: string) => void;
   onMarkAttendance: (memberId: string, memberName: string) => void;
@@ -121,6 +134,8 @@ function getPlanBadgeStyle(planName: string): { label: string; className: string
 export const RenewalsScreen: React.FC<RenewalsScreenProps> = ({
   members,
   renewals,
+  gymName = 'My Gym',
+  upiId,
   isEmptyState = false,
   initialFilterTab = 'all',
   onOpenRenewModal,
@@ -134,9 +149,9 @@ export const RenewalsScreen: React.FC<RenewalsScreenProps> = ({
   onOpenFollowUps,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedTab, setSelectedTab] = useState<'all' | 'expiring' | 'expired' | 'renewed'>(
-    initialFilterTab
-  );
+  const [selectedTab, setSelectedTab] = useState<
+    'all' | 'today' | 'within_3d' | 'within_7d' | 'expiring' | 'expired' | 'renewed'
+  >(initialFilterTab);
   const [sortBy, setSortBy] = useState<'expiry' | 'overdue' | 'name' | 'recent'>('expiry');
   const [isSortDropdownOpen, setIsSortDropdownOpen] = useState(false);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
@@ -145,6 +160,7 @@ export const RenewalsScreen: React.FC<RenewalsScreenProps> = ({
     urgencyWindow: 'all',
     paymentDue: 'all',
   });
+  const [whatsAppTarget, setWhatsAppTarget] = useState<WhatsAppFollowUpTarget | null>(null);
 
   // Selected member to view Member Detail Screen (Page 3)
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
@@ -211,7 +227,20 @@ export const RenewalsScreen: React.FC<RenewalsScreenProps> = ({
           if (!matchName && !matchPhone && !matchId) return false;
         }
 
-        // 2. Selected Filter Tab
+        // 2. Selected Filter Tab (Today, 3 Days, 7 Days, 30 Days, Expired, Renewed)
+        if (selectedTab === 'today' && m.daysUntilExpiry !== 0) return false;
+        if (
+          selectedTab === 'within_3d' &&
+          (m.daysUntilExpiry < 0 || m.daysUntilExpiry > 3)
+        ) {
+          return false;
+        }
+        if (
+          selectedTab === 'within_7d' &&
+          (m.daysUntilExpiry < 0 || m.daysUntilExpiry > 7)
+        ) {
+          return false;
+        }
         if (selectedTab === 'expiring' && expiryCat !== 'expiring') return false;
         if (selectedTab === 'expired' && expiryCat !== 'expired') return false;
         if (selectedTab === 'renewed' && !isRenewed) return false;
@@ -540,7 +569,9 @@ export const RenewalsScreen: React.FC<RenewalsScreenProps> = ({
           </div>
 
           <span className="text-[9.5px] sm:text-[10.5px] text-[#15803D] font-medium mt-1.5 block leading-none truncate">
-            {renewedThisMonthCount > 0 ? `+20% from last month` : 'No renewals yet'}
+            {renewedThisMonthCount > 0
+              ? `${renewedThisMonthCount} completed this month`
+              : 'No renewals yet'}
           </span>
         </button>
       </div>
@@ -549,12 +580,15 @@ export const RenewalsScreen: React.FC<RenewalsScreenProps> = ({
       {/* D. FILTER TABS & SORT PILL ROW                                 */}
       {/* ============================================================== */}
       <div className="mt-3 flex items-center justify-between gap-1.5 relative">
-        {/* Scrollable Status Tabs */}
+        {/* Scrollable Status & Period Tabs */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none snap-x">
           {[
             { id: 'all', label: 'All', dot: null },
-            { id: 'expiring', label: 'Expiring Soon', dot: '#F59E0B' },
-            { id: 'expired', label: 'Expired', dot: '#EF4444' },
+            { id: 'today', label: 'Today', dot: '#DC2626' },
+            { id: 'within_3d', label: '3 Days', dot: '#EF4444' },
+            { id: 'within_7d', label: '7 Days', dot: '#F59E0B' },
+            { id: 'expiring', label: '30 Days', dot: '#D97706' },
+            { id: 'expired', label: 'Expired', dot: '#DC2626' },
             { id: 'renewed', label: 'Renewed', dot: '#16A34A' },
           ].map((tab) => {
             const isSelected = selectedTab === tab.id;
@@ -727,126 +761,137 @@ export const RenewalsScreen: React.FC<RenewalsScreenProps> = ({
               <div
                 key={m.id}
                 onClick={() => setSelectedMemberId(m.id)}
-                className="bg-white rounded-xl sm:rounded-2xl border border-[#EAE5DC] p-2.5 sm:p-3 shadow-2xs hover:shadow-xs hover:border-[#D5CFC2] transition-all cursor-pointer group"
+                className="bg-white rounded-xl sm:rounded-2xl border border-[#EAE5DC] p-3 sm:p-3.5 shadow-2xs hover:shadow-xs hover:border-[#D5CFC2] transition-all cursor-pointer group space-y-2.5"
                 role="button"
                 tabIndex={0}
                 aria-label={`View renewal and membership details for ${m.name}`}
               >
-                <div className="flex items-center justify-between gap-2">
-                  {/* ZONE 1: Avatar + Member Name & ID */}
-                  <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-[1.25]">
+                {/* TOP ROW: Circular Avatar + Member Full Name (100% visible, wide, prominent) + Status Pill & Chevron */}
+                <div className="flex items-start justify-between gap-2.5">
+                  <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                    {/* Circular Avatar Photo / Initial */}
                     {m.photoUrl ? (
                       <img
                         src={m.photoUrl}
                         alt={m.name}
-                        className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover shrink-0 border border-[#EAE5DC] shadow-2xs"
+                        className="w-10 h-10 rounded-full object-cover shrink-0 border border-[#EAE5DC] shadow-2xs mt-0.5"
                       />
                     ) : (
-                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#E0E7FF] text-[#102A71] font-bold text-xs sm:text-sm flex items-center justify-center shrink-0 border border-[#C7D2FE]">
-                        {m.name.charAt(0)}
+                      <div className="w-10 h-10 rounded-full bg-[#E0E7FF] text-[#102A71] font-bold text-xs sm:text-sm flex items-center justify-center shrink-0 border border-[#C7D2FE] mt-0.5">
+                        {m.name.charAt(0).toUpperCase()}
                       </div>
                     )}
 
-                    <div className="min-w-0">
-                      <h3 className="font-bold text-[13px] sm:text-[13.5px] text-[#191919] truncate leading-tight group-hover:text-[#102A71] transition-colors">
+                    {/* Member Full Name — Prominent, Clean, Beautiful & 100% Fully Visible */}
+                    <div className="min-w-0 flex-1">
+                      <h3 className="font-bold text-[15px] sm:text-[16px] text-[#191919] leading-snug group-hover:text-[#102A71] transition-colors break-normal">
                         {m.name}
                       </h3>
-                      <p className="text-[10.5px] sm:text-[11px] text-[#71717A] mt-0.5 truncate leading-none">
-                        ID: {m.memberCode || m.id}
-                      </p>
+                      <div className="flex items-center gap-1.5 text-[11.5px] text-[#52525B] mt-0.5 leading-tight font-normal flex-wrap">
+                        <span className="font-medium text-[#71717A] bg-[#F4F1EA] px-1.5 py-0.5 rounded text-[10px] leading-none shrink-0">
+                          {m.memberCode || m.id}
+                        </span>
+                        <span className="text-[#D1D5DB]">•</span>
+                        <span>+91 {cleanPhone}</span>
+                      </div>
                     </div>
                   </div>
 
-                  {/* ZONE 2: Colored Plan Pill + Plan Fee */}
-                  <div className="flex flex-col items-start shrink-0 min-w-[78px] sm:min-w-[92px]">
+                  {/* Right side: Expiry Status Pill + Chevron */}
+                  <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
+                    {expiryCat === 'expiring' ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10.5px] font-bold bg-[#FFF4E5] text-[#D97706] leading-none">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B]" />
+                        <span>Expiring</span>
+                      </span>
+                    ) : expiryCat === 'expired' ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10.5px] font-bold bg-[#FEECEB] text-[#DC2626] leading-none">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#EF4444]" />
+                        <span>Expired</span>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10.5px] font-bold bg-[#E8FAF0] text-[#16A34A] leading-none">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A]" />
+                        <span>Active</span>
+                      </span>
+                    )}
+                    <ChevronRight className="w-4 h-4 text-[#9CA3AF] group-hover:text-[#191919] transition-colors shrink-0" />
+                  </div>
+                </div>
+
+                {/* BOTTOM ROW: Plan Pill & Expiry Urgency on Left, Call & WhatsApp & Renew buttons on Right */}
+                <div className="pt-2 border-t border-[#F2EFE8] flex items-center justify-between gap-2 flex-wrap sm:flex-nowrap">
+                  {/* Left: Plan & Expiry Details */}
+                  <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap min-w-0">
                     <span
-                      className={`px-2 py-0.5 rounded-full text-[10px] sm:text-[10.5px] font-semibold leading-tight whitespace-nowrap ${planBadge.className}`}
+                      className={`px-2 py-0.5 rounded-full text-[10.5px] font-bold leading-tight whitespace-nowrap ${planBadge.className}`}
                     >
                       {planBadge.label}
                     </span>
-                    <span className="text-[11.5px] sm:text-[12px] font-bold text-[#191919] mt-1 leading-none pl-0.5">
+                    <span className="text-[11.5px] font-bold text-[#191919]">
                       {conciseFee}
                     </span>
-                  </div>
-
-                  {/* ZONE 3: Divider + Expiry Date + Days Remaining / Overdue */}
-                  <div className="border-l border-[#F0ECE3] pl-2 sm:pl-3 flex flex-col justify-center shrink-0 min-w-[76px] sm:min-w-[92px]">
+                    <span className="text-[#D1D5DB]">•</span>
                     <span
-                      className={`text-[11px] sm:text-[12px] font-medium leading-tight whitespace-nowrap ${
-                        isCritical ? 'text-[#DC2626]' : 'text-[#1E293B]'
-                      }`}
-                    >
-                      {formattedExpiry}
-                    </span>
-                    <span
-                      className={`text-[10px] sm:text-[11px] font-semibold mt-0.5 leading-none whitespace-nowrap ${
+                      className={`text-[11px] sm:text-[11.5px] font-semibold whitespace-nowrap ${
                         isCritical
                           ? 'text-[#DC2626]'
                           : isWarning
                           ? 'text-[#D97706]'
-                          : 'text-[#6B7280]'
+                          : 'text-[#52525B]'
                       }`}
                     >
-                      {daysLabel}
+                      {formattedExpiry} ({daysLabel})
                     </span>
                   </div>
 
-                  {/* ZONE 4: Status Badge + Call & WhatsApp + Chevron */}
-                  <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-                    <div className="flex flex-col items-end gap-1">
-                      {/* Explicit Membership Status Pill */}
-                      {expiryCat === 'expiring' ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] sm:text-[10.5px] font-semibold bg-[#FFF4E5] text-[#D97706] leading-none">
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B]" />
-                          <span>Expiring</span>
-                        </span>
-                      ) : expiryCat === 'expired' ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] sm:text-[10.5px] font-semibold bg-[#FEECEB] text-[#DC2626] leading-none">
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#EF4444]" />
-                          <span>Expired</span>
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] sm:text-[10.5px] font-semibold bg-[#E8FAF0] text-[#16A34A] leading-none">
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A]" />
-                          <span>Active</span>
-                        </span>
-                      )}
+                  {/* Right: Direct Action Buttons (Call, WhatsApp, Renew) */}
+                  <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+                    <a
+                      href={`tel:${cleanPhone}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-7 h-7 sm:w-7.5 sm:h-7.5 rounded-full bg-[#EFF6FF] text-[#2563EB] hover:bg-[#DBEAFE] flex items-center justify-center transition-colors cursor-pointer"
+                      title={`Call ${m.name}`}
+                      aria-label={`Call ${m.name}`}
+                    >
+                      <Phone className="w-3.5 h-3.5 stroke-[2.2]" />
+                    </a>
 
-                      {/* Direct Call & WhatsApp Action Buttons */}
-                      <div className="flex items-center gap-1">
-                        <a
-                          href={`tel:${cleanPhone}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="w-6.5 h-6.5 sm:w-7 sm:h-7 rounded-full bg-[#EFF6FF] text-[#2563EB] hover:bg-[#DBEAFE] flex items-center justify-center transition-colors"
-                          title={`Call ${m.name}`}
-                          aria-label={`Call ${m.name}`}
-                        >
-                          <Phone className="w-3 h-3 sm:w-3.5 sm:h-3.5 stroke-[2.2]" />
-                        </a>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setWhatsAppTarget({
+                          personId: m.id,
+                          personType: 'Member',
+                          name: m.name,
+                          phone: m.phone,
+                          planName: m.membershipPlan,
+                          expiryDate: formattedExpiry,
+                          daysUntilExpiry: m.daysUntilExpiry,
+                          pendingAmount: m.pendingAmount,
+                          defaultCategory: 'renewal',
+                        });
+                      }}
+                      className="w-7 h-7 sm:w-7.5 sm:h-7.5 rounded-full bg-[#ECFDF5] text-[#16A34A] hover:bg-[#D1FAE5] flex items-center justify-center transition-colors cursor-pointer"
+                      title={`WhatsApp renewal reminder to ${m.name}`}
+                      aria-label={`Send WhatsApp renewal reminder to ${m.name}`}
+                    >
+                      <MessageCircle className="w-3.5 h-3.5 stroke-[2.2]" />
+                    </button>
 
-                        <a
-                          href={`https://wa.me/91${cleanPhone}?text=Hi%20${encodeURIComponent(
-                            m.name
-                          )},%20your%20${encodeURIComponent(
-                            m.membershipPlan
-                          )}%20at%20MuscleFit%20Gym%20${
-                            expiryCat === 'expired'
-                              ? `expired%20on%20${encodeURIComponent(formattedExpiry)}`
-                              : `is%20expiring%20on%20${encodeURIComponent(formattedExpiry)}`
-                          }.%20Let%20us%20know%20to%20renew!`}
-                          target="_blank"
-                          rel="noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="w-6.5 h-6.5 sm:w-7 sm:h-7 rounded-full bg-[#ECFDF5] text-[#16A34A] hover:bg-[#D1FAE5] flex items-center justify-center transition-colors"
-                          title={`WhatsApp ${m.name}`}
-                          aria-label={`Send WhatsApp renewal reminder to ${m.name}`}
-                        >
-                          <MessageCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 stroke-[2.2]" />
-                        </a>
-                      </div>
-                    </div>
-
-                    <ChevronRight className="w-3.5 h-3.5 text-[#9CA3AF] group-hover:text-[#191919] transition-colors shrink-0" />
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenRenewModal(m.id);
+                      }}
+                      className="h-7 sm:h-7.5 px-2.5 rounded-full bg-[#102A71] hover:bg-[#0D225D] text-white text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
+                      title={`Renew membership for ${m.name}`}
+                    >
+                      <RotateCw className="w-3 h-3 stroke-[2.5]" />
+                      <span>Renew</span>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -854,6 +899,23 @@ export const RenewalsScreen: React.FC<RenewalsScreenProps> = ({
           })
         )}
       </div>
+
+      {/* One-Tap WhatsApp Follow-Up Modal */}
+      <WhatsAppFollowUpModal
+        isOpen={Boolean(whatsAppTarget)}
+        target={whatsAppTarget}
+        gymName={gymName}
+        upiId={upiId}
+        onClose={() => setWhatsAppTarget(null)}
+        onConfirmSent={(payload) => {
+          if (onAddFollowUp) {
+            onAddFollowUp(payload.personId, {
+              note: `WhatsApp (${payload.category}): ${payload.messageText}`,
+              type: 'WhatsApp',
+            });
+          }
+        }}
+      />
 
       {/* ============================================================== */}
       {/* ADVANCED FILTER MODAL FOR RENEWALS                             */}

@@ -29,6 +29,11 @@ import {
   QrCode,
 } from 'lucide-react';
 import { Member, FollowUpItem } from '../../types/dashboard';
+import {
+  WhatsAppFollowUpModal,
+  WhatsAppFollowUpTarget,
+  WhatsAppTemplateCategory,
+} from '../modals/WhatsAppFollowUpModal';
 
 interface MemberDetailViewProps {
   member: Member;
@@ -58,6 +63,7 @@ export const MemberDetailView: React.FC<MemberDetailViewProps> = ({
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [isCopiedPhone, setIsCopiedPhone] = useState(false);
   const [attendanceSuccess, setAttendanceSuccess] = useState(false);
+  const [whatsAppTarget, setWhatsAppTarget] = useState<WhatsAppFollowUpTarget | null>(null);
 
   // New Follow-up form state
   const [isAddingFollowUp, setIsAddingFollowUp] = useState(false);
@@ -262,7 +268,7 @@ export const MemberDetailView: React.FC<MemberDetailViewProps> = ({
 
           <div className="flex-1 min-w-0">
             <div className="flex flex-wrap items-center justify-between gap-1">
-              <h2 className="text-base sm:text-lg font-bold text-[#191919] truncate leading-tight">
+              <h2 className="text-base sm:text-lg font-bold text-[#191919] break-words leading-tight">
                 {member.name}
               </h2>
             </div>
@@ -292,15 +298,36 @@ export const MemberDetailView: React.FC<MemberDetailViewProps> = ({
               <span>Call</span>
             </a>
 
-            <a
-              href={`https://wa.me/91${cleanPhone}?text=Hi%20${encodeURIComponent(member.name)},%20greetings%20from%20Gym%20Management!`}
-              target="_blank"
-              rel="noreferrer"
-              className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-xl bg-[#ECFDF5] text-[#16A34A] text-[11px] font-bold hover:bg-[#D1FAE5] transition-colors"
+            <button
+              type="button"
+              onClick={() => {
+                let tpl: WhatsAppTemplateCategory = 'renewal';
+                if ((member.pendingAmount || 0) > 0) {
+                  tpl = 'payment';
+                } else if ((member.daysUntilExpiry ?? 99) <= 7) {
+                  tpl = 'renewal';
+                } else if ((member.daysSinceLastVisit ?? 0) >= 7) {
+                  tpl = 'inactive';
+                }
+                setWhatsAppTarget({
+                  personType: 'Member',
+                  personId: member.id,
+                  name: member.name,
+                  phone: member.phone,
+                  defaultCategory: tpl,
+                  planName: member.membershipPlan,
+                  expiryDate: member.expiryDate,
+                  daysUntilExpiry: member.daysUntilExpiry,
+                  pendingAmount: member.pendingAmount,
+                  lastVisitDate: member.lastVisitDate,
+                  daysSinceLastVisit: member.daysSinceLastVisit,
+                });
+              }}
+              className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-xl bg-[#ECFDF5] text-[#16A34A] text-[11px] font-bold hover:bg-[#D1FAE5] transition-colors cursor-pointer"
             >
               <MessageCircle className="w-3.5 h-3.5" />
               <span>WhatsApp</span>
-            </a>
+            </button>
 
             <button
               onClick={handleCopyPhone}
@@ -776,6 +803,22 @@ export const MemberDetailView: React.FC<MemberDetailViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* One-Tap WhatsApp Follow-Up Modal */}
+      <WhatsAppFollowUpModal
+        isOpen={Boolean(whatsAppTarget)}
+        target={whatsAppTarget}
+        onClose={() => setWhatsAppTarget(null)}
+        onConfirmSent={(payload) => {
+          if (onAddFollowUp) {
+            onAddFollowUp(member.id, {
+              type: 'WhatsApp',
+              note: `WhatsApp follow-up confirmed sent: "${payload.messageText.slice(0, 90)}${payload.messageText.length > 90 ? '...' : ''}"`,
+            });
+          }
+          setWhatsAppTarget(null);
+        }}
+      />
     </div>
   );
 };
