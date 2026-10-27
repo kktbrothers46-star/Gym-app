@@ -2562,10 +2562,6 @@ export function useGymStore() {
     startWithEmptyGym?: boolean;
   }) => {
     updateStore((prev) => {
-      const nextGym = payload.gymProfile ? { ...prev.gym, ...payload.gymProfile } : prev.gym;
-      const nextSettings = payload.settings
-        ? { ...prev.settings, ...payload.settings }
-        : prev.settings;
       const nextOnboarding: OnboardingPreferences = {
         ...(prev.onboarding || INITIAL_ONBOARDING),
         ...(payload.onboarding || {}),
@@ -2574,112 +2570,25 @@ export function useGymStore() {
         completedAt: new Date().toISOString(),
       };
 
-      // If the user selected real offered plans during onboarding and no plans exist yet, create starter plans for those durations
-      let nextPlans = [...(prev.plans || [])];
-      if (
-        nextPlans.length === 0 &&
-        nextOnboarding.offeredPlans?.length &&
-        !nextOnboarding.offeredPlans.includes("Haven't created plans yet")
-      ) {
-        const todayIso = getLocalIsoDate();
-        const planTemplates: Array<{
-          match: string;
-          name: string;
-          durationValue: number;
-          durationUnit: 'days' | 'months';
-          durationDays: number;
-          durationLabel: string;
-          price: number;
-        }> = [
-          {
-            match: 'Monthly',
-            name: 'Monthly Plan',
-            durationValue: 1,
-            durationUnit: 'months',
-            durationDays: 30,
-            durationLabel: '1 Month (30 Days)',
-            price: 2000,
-          },
-          {
-            match: 'Quarterly',
-            name: 'Quarterly Plan',
-            durationValue: 3,
-            durationUnit: 'months',
-            durationDays: 90,
-            durationLabel: '3 Months (90 Days)',
-            price: 5500,
-          },
-          {
-            match: 'Half-yearly',
-            name: 'Half-Yearly Plan',
-            durationValue: 6,
-            durationUnit: 'months',
-            durationDays: 180,
-            durationLabel: '6 Months (180 Days)',
-            price: 9500,
-          },
-          {
-            match: 'Annual',
-            name: 'Annual Plan',
-            durationValue: 12,
-            durationUnit: 'months',
-            durationDays: 365,
-            durationLabel: '12 Months (365 Days)',
-            price: 15000,
-          },
-        ];
+      // Store starting member range and management method on gym profile for ongoing tailored guidance
+      const nextGym: GymProfile = {
+        ...prev.gym,
+        ...(payload.gymProfile || {}),
+        startingMemberRange:
+          nextOnboarding.customMemberCount?.trim() ||
+          nextOnboarding.memberCountOption ||
+          prev.gym.startingMemberRange,
+        managementMethod:
+          nextOnboarding.customManagementMethod?.trim() ||
+          nextOnboarding.managementMethod ||
+          prev.gym.managementMethod,
+      };
 
-        planTemplates.forEach((tpl, idx) => {
-          if (nextOnboarding.offeredPlans?.includes(tpl.match)) {
-            nextPlans.push({
-              id: `plan-onb-${idx + 1}`,
-              code: `PLN00${nextPlans.length + 1}`,
-              name: tpl.name,
-              durationValue: tpl.durationValue,
-              durationUnit: tpl.durationUnit,
-              durationDays: tpl.durationDays,
-              durationLabel: tpl.durationLabel,
-              price: tpl.price,
-              status: 'active',
-              isCustom: false,
-              description: `${tpl.name} configured during gym setup.`,
-              features: ['Gym Floor Access', 'Cardio & Strength Zone'],
-              createdAt: todayIso,
-              category: 'General',
-            });
-          }
-        });
+      const nextSettings = payload.settings
+        ? { ...prev.settings, ...payload.settings }
+        : prev.settings;
 
-        if (
-          nextOnboarding.offeredPlans.includes('Custom duration') &&
-          nextOnboarding.customPlanDuration?.trim()
-        ) {
-          nextPlans.push({
-            id: `plan-onb-custom`,
-            code: `PLN00${nextPlans.length + 1}`,
-            name: nextOnboarding.customPlanDuration.trim(),
-            durationValue: 30,
-            durationUnit: 'days',
-            durationDays: 30,
-            durationLabel: nextOnboarding.customPlanDuration.trim(),
-            price: 1500,
-            status: 'active',
-            isCustom: true,
-            description: 'Custom membership plan created during setup.',
-            features: ['Gym Floor Access'],
-            createdAt: todayIso,
-            category: 'Custom',
-          });
-        }
-      }
-
-      if (payload.updatedPlanPrices) {
-        nextPlans = nextPlans.map((p) =>
-          payload.updatedPlanPrices && payload.updatedPlanPrices[p.id] !== undefined
-            ? { ...p, price: payload.updatedPlanPrices[p.id] }
-            : p
-        );
-      }
+      const nextPlans = [...(prev.plans || [])];
 
       return {
         ...prev,

@@ -342,40 +342,43 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
   return (
     <div className="w-full flex-1 pb-3">
       {/* ============================================================== */}
-      {/* A. HEADER: Title, Subtitle, & "+ Add Expense" Button           */}
+      {/* A. HEADER: Title, Subtitle, & Prominent Action Buttons         */}
       {/* ============================================================== */}
-      <header className="w-full flex flex-wrap items-center justify-between gap-2 pt-2.5 pb-2 px-0.5">
+      <header className="w-full flex flex-col gap-2.5 pt-2.5 pb-2 px-0.5">
         <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <h1 className="text-[22px] sm:text-[24px] font-bold text-[#191919] tracking-tight leading-tight">
-              Expenses
-            </h1>
-            {onSwitchToPayments && (
-              <button
-                type="button"
-                onClick={onSwitchToPayments}
-                className="px-2 py-0.5 rounded-full bg-white/80 hover:bg-white border border-[#EAE5DC] text-[10.5px] font-semibold text-[#4B5563] hover:text-[#102A71] transition-colors cursor-pointer"
-                title="Switch to Member Payments"
-              >
-                ← Payments
-              </button>
-            )}
-          </div>
+          <h1 className="text-[22px] sm:text-[24px] font-bold text-[#191919] tracking-tight leading-tight">
+            Expenses
+          </h1>
           <p className="text-[#71717A] text-[12px] font-normal mt-0.5 leading-none">
-            Track your gym&apos;s spending.
+            Track your gym&apos;s spending and operating costs.
           </p>
         </div>
 
-        {/* Primary "+ Add Expense" Action Button */}
-        <button
-          type="button"
-          onClick={() => onOpenAddExpense(null)}
-          className="flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-[#102A71] hover:bg-[#0D225D] active:scale-95 text-white text-[12px] font-semibold shadow-2xs transition-all cursor-pointer shrink-0"
-          aria-label="Add Expense"
-        >
-          <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-          <span>Add Expense</span>
-        </button>
+        {/* Big Clear Action Row: Add Expense & Switch to Payments */}
+        <div className="grid grid-cols-2 gap-2.5 w-full">
+          <button
+            type="button"
+            onClick={() => onOpenAddExpense(null)}
+            className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#102A71] hover:bg-[#0D225D] active:scale-[0.98] text-white text-[13.5px] sm:text-[14px] font-bold shadow-xs transition-all cursor-pointer"
+            aria-label="Add Expense"
+          >
+            <Plus className="w-4 h-4 stroke-[2.5] shrink-0" />
+            <span>Add Expense</span>
+          </button>
+
+          {onSwitchToPayments && (
+            <button
+              type="button"
+              onClick={onSwitchToPayments}
+              className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-white hover:bg-[#EEF2FF] active:scale-[0.98] border-2 border-[#102A71] text-[#102A71] text-[13.5px] sm:text-[14px] font-bold shadow-xs transition-all cursor-pointer"
+              title="Switch to Member Payments"
+              aria-label="Switch to Member Payments"
+            >
+              <Wallet className="w-4 h-4 stroke-[2.3] shrink-0" />
+              <span>← Payments</span>
+            </button>
+          )}
+        </div>
       </header>
 
       {/* ============================================================== */}

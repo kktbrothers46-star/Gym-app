@@ -153,9 +153,13 @@ export async function loadGymFromFirestore(
   let gym: GymProfile;
 
   if (gymSnap.exists()) {
-    gym = gymSnap.data() as GymProfile;
+    const rawGym = gymSnap.data() as GymProfile;
+    gym = {
+      ...rawGym,
+      id: gymId,
+    };
     // If gym was just created with default 'My Gym' during auth state change before gymName arrived, update it
-    let needsUpdate = false;
+    let needsUpdate = rawGym.id !== gymId;
     if (effectiveGymName && (!gym.name || gym.name === 'My Gym')) {
       gym = { ...gym, name: effectiveGymName };
       needsUpdate = true;
@@ -172,6 +176,7 @@ export async function loadGymFromFirestore(
         gymRef,
         sanitizeForFirestore({
           ...gym,
+          id: gymId,
           ownerId: userId,
           updatedAt: new Date().toISOString(),
         }),
@@ -234,6 +239,7 @@ export async function loadGymFromFirestore(
   let onboarding: OnboardingPreferences = {
     ...INITIAL_ONBOARDING,
     hasCompletedOnboarding: false,
+    selectedRole: 'owner',
     currentStep: 'gym_name',
     gymName: gym.name,
   };
@@ -242,12 +248,38 @@ export async function loadGymFromFirestore(
   const onboardingSnap = await getDoc(onboardingRef);
   if (onboardingSnap.exists()) {
     const savedOnb = onboardingSnap.data() as OnboardingPreferences;
+    const isPreAuthStep =
+      !savedOnb.currentStep ||
+      savedOnb.currentStep === 'welcome' ||
+      savedOnb.currentStep === 'role' ||
+      savedOnb.currentStep === 'member_coming_soon';
+    const normalizedStep = isPreAuthStep ? 'gym_name' : savedOnb.currentStep;
+    const isCompleted =
+      Boolean(savedOnb.hasCompletedOnboarding) ||
+      savedOnb.currentStep === 'complete' ||
+      Boolean(savedOnb.completedAt);
+
     onboarding = {
       ...onboarding,
       ...savedOnb,
+      selectedRole: 'owner',
+      currentStep: isCompleted ? 'complete' : normalizedStep,
+      hasCompletedOnboarding: isCompleted,
       gymName: savedOnb.gymName || gym.name,
     };
-  } else if (isNewGymCreated) {
+
+    if (isPreAuthStep || savedOnb.selectedRole !== 'owner' || isCompleted !== savedOnb.hasCompletedOnboarding) {
+      await setDoc(
+        onboardingRef,
+        sanitizeForFirestore({
+          ...onboarding,
+          gymId,
+          ownerId: userId,
+        }),
+        { merge: true }
+      );
+    }
+  } else {
     await setDoc(
       onboardingRef,
       sanitizeForFirestore({
@@ -307,6 +339,33 @@ export async function loadGymFromFirestore(
     fetchCollection<GymNotificationItem>('notifications'),
   ]);
 
+  // If the gym already has operational records or completed setup fields on the profile, ensure onboarding is marked completed
+  const hasExistingGymActivity =
+    members.length > 0 ||
+    plans.length > 0 ||
+    payments.length > 0 ||
+    expenses.length > 0 ||
+    Boolean(gym.startingMemberRange) ||
+    Boolean(gym.managementMethod);
+
+  if (hasExistingGymActivity && !onboarding.hasCompletedOnboarding) {
+    onboarding = {
+      ...onboarding,
+      hasCompletedOnboarding: true,
+      currentStep: 'complete',
+      selectedRole: 'owner',
+    };
+    await setDoc(
+      onboardingRef,
+      sanitizeForFirestore({
+        ...onboarding,
+        gymId,
+        ownerId: userId,
+      }),
+      { merge: true }
+    );
+  }
+
   return {
     userProfile,
     gym,
@@ -343,6 +402,7 @@ export async function syncGymProfileToFirestore(
       gymRef,
       sanitizeForFirestore({
         ...gymData,
+        id: gymId,
         ownerId: userId,
         updatedAt: new Date().toISOString(),
       }),
@@ -456,11 +516,13 @@ export function syncStoreDiffToFirestore(
   const user = auth.currentUser;
   if (!user) return;
 
-  const gymId = next.gym?.id;
-  // Do not sync the unauthenticated local default gym ID
-  if (!gymId || gymId === 'gym-1' || gymId === 'gym-iron-pulse') return;
-
   const userId = user.uid;
+  const cleanId = userId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 20) || 'main';
+  const rawGymId = next.gym?.id;
+  const gymId =
+    rawGymId && rawGymId !== 'gym-1' && rawGymId !== 'gym-iron-pulse'
+      ? rawGymId
+      : `gym-${cleanId}`;
 
   if (prev.gym !== next.gym) {
     syncGymProfileToFirestore(gymId, next.gym, userId);

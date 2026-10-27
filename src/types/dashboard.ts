@@ -19,6 +19,8 @@ export interface GymProfile {
   sundayHours?: string;
   establishedYear?: string;
   branchCode?: string;
+  startingMemberRange?: string;
+  managementMethod?: string;
 }
 
 export interface GymSettings {

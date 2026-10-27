@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useGymStore } from './data/gymStore';
 import { SplashScreen } from './components/SplashScreen';
 import { Header } from './components/dashboard/Header';
@@ -11,6 +11,7 @@ import { BannerCard } from './components/dashboard/BannerCard';
 import { BusinessOverview } from './components/dashboard/BusinessOverview';
 import { QuickActions } from './components/dashboard/QuickActions';
 import { AttentionSection } from './components/dashboard/AttentionSection';
+import { SetupGrowthGuide } from './components/dashboard/SetupGrowthGuide';
 import { BottomNav, NavTab } from './components/dashboard/BottomNav';
 
 import { MembersScreen } from './components/members/MembersScreen';
@@ -116,6 +117,8 @@ export default function App() {
     'splash' | 'roles' | 'auth' | 'onboarding' | 'dashboard'
   >('splash');
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
+  const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
+  const pendingSplashEnterRef = useRef<boolean>(false);
   const [authInitialMode, setAuthInitialMode] = useState<'signup' | 'login'>('signup');
   const [activeTab, setActiveTab] = useState<NavTab>('home');
   const [membersView, setMembersView] = useState<'leads' | 'followups' | 'renewals' | 'directory'>(
@@ -151,7 +154,7 @@ export default function App() {
 
   // Simulation states for testing acceptance criteria
   const [isSimulatedLoading, setIsSimulatedLoading] = useState(false);
-  const [simulatedError, setSimulatedError] = useState<string | null>(null);
+  const [simulatedError, setSimulatedError] = useState(null as string | null);
 
   // Firebase Auth & Live Cloud Firestore Synchronization
   useEffect(() => {
@@ -174,6 +177,8 @@ export default function App() {
             members: firestoreData.members,
             plans: firestoreData.plans,
             payments: firestoreData.payments,
+            paymentPromises: firestoreData.paymentPromises,
+            cashReconciliations: firestoreData.cashReconciliations,
             renewals: firestoreData.renewals,
             expenses: firestoreData.expenses,
             attendance: firestoreData.attendance,
@@ -185,7 +190,7 @@ export default function App() {
             isEmptyState: false,
           });
 
-          // Route according to onboarding status
+          // Route according to onboarding status (never show role selection to an authenticated owner)
           if (firestoreData.onboarding?.hasCompletedOnboarding) {
             setCurrentScreen('dashboard');
           } else {
@@ -198,11 +203,22 @@ export default function App() {
           } else {
             setCurrentScreen('onboarding');
           }
+        } finally {
+          setIsAuthChecking(false);
+          pendingSplashEnterRef.current = false;
         }
       } else {
         setCurrentUser(null);
-        // If unauthenticated, ensure protected dashboard is not active
-        setCurrentScreen((prev) => (prev === 'dashboard' ? 'roles' : prev));
+        setIsAuthChecking(false);
+        if (pendingSplashEnterRef.current) {
+          pendingSplashEnterRef.current = false;
+          setCurrentScreen('roles');
+        } else {
+          // If unauthenticated, ensure protected dashboard or owner onboarding is not active
+          setCurrentScreen((prev) =>
+            prev === 'dashboard' || prev === 'onboarding' ? 'roles' : prev
+          );
+        }
       }
     });
 
@@ -297,7 +313,12 @@ export default function App() {
     return (
       <SplashScreen
         onEnterDashboard={() => {
-          if (currentUser) {
+          if (isAuthChecking) {
+            // Wait for Firebase Auth & Firestore check to finish before routing
+            pendingSplashEnterRef.current = true;
+            return;
+          }
+          if (currentUser || auth.currentUser) {
             if (state.onboarding?.hasCompletedOnboarding) {
               setCurrentScreen('dashboard');
             } else {
@@ -311,8 +332,8 @@ export default function App() {
     );
   }
 
-  // 2. Role Selection (Owner vs Member, with Member Coming Soon)
-  if (currentScreen === 'roles') {
+  // 2. Role Selection (Only for unauthenticated users before Sign Up / Login)
+  if (currentScreen === 'roles' && !currentUser) {
     return (
       <OnboardingScreen
         gym={state.gym}
@@ -325,7 +346,7 @@ export default function App() {
           setAuthInitialMode('signup');
           setCurrentScreen('auth');
         }}
-        onSaveProgress={saveOnboardingProgress}
+        onSaveProgress={() => {}}
         onCompleteOnboarding={() => {}}
         onBackToSplash={() => setCurrentScreen('splash')}
       />
@@ -353,6 +374,8 @@ export default function App() {
               members: firestoreData.members,
               plans: firestoreData.plans,
               payments: firestoreData.payments,
+              paymentPromises: firestoreData.paymentPromises,
+              cashReconciliations: firestoreData.cashReconciliations,
               renewals: firestoreData.renewals,
               expenses: firestoreData.expenses,
               attendance: firestoreData.attendance,
@@ -379,8 +402,11 @@ export default function App() {
     );
   }
 
-  // 4. Owner Onboarding Flow (Duolingo-style 7 question screens + checklist)
-  if (currentScreen === 'onboarding') {
+  // 4. Owner Onboarding Flow (Post-auth owner setup questions + checklist)
+  if (
+    currentScreen === 'onboarding' ||
+    (currentScreen === 'roles' && currentUser && !state.onboarding?.hasCompletedOnboarding)
+  ) {
     return (
       <OnboardingScreen
         gym={state.gym}
@@ -412,7 +438,7 @@ export default function App() {
             setActiveTab('home');
           }
         }}
-        onBackToSplash={() => setCurrentScreen('roles')}
+        onBackToSplash={() => {}}
       />
     );
   }
@@ -535,6 +561,7 @@ export default function App() {
             <MembershipPlansScreen
               plans={state.plans}
               members={state.members}
+              onboarding={state.onboarding}
               isEmptyState={state.isEmptyState}
               onAddPlan={addPlan}
               onUpdatePlan={updatePlan}
@@ -590,7 +617,7 @@ export default function App() {
                 members={state.members}
                 paymentPromises={state.paymentPromises || []}
                 cashReconciliations={state.cashReconciliations || []}
-                gymName={state.gym?.name || 'MuscleFit Gym'}
+                gymName={state.gym?.name || 'My Gym'}
                 collectedThisMonth={state.collectedThisMonth}
                 isEmptyState={state.isEmptyState}
                 initialViewMode={paymentsInitialViewMode}
@@ -784,6 +811,7 @@ export default function App() {
               />
             ) : reportsView === 'retention' ? (
               <RetentionReportScreen
+                gymName={state.gym?.name || 'My Gym'}
                 members={state.members}
                 renewals={state.renewals || []}
                 isEmptyState={state.isEmptyState}
@@ -909,6 +937,27 @@ export default function App() {
               <BannerCard />
             </div>
 
+            {/* Setup & Growth Guide tailored to Starting Size and Record-Keeping Migration */}
+            <SetupGrowthGuide
+              gym={state.gym}
+              onboarding={state.onboarding}
+              membersCount={state.members.length}
+              plansCount={state.plans.length}
+              paymentsCount={state.payments.length}
+              attendanceCount={(state.attendance || []).length}
+              onOpenAddMember={() => {
+                setPreselectedPlanForAddMember({});
+                setIsAddMemberOpen(true);
+              }}
+              onOpenImportMembers={() => setIsImportMembersOpen(true)}
+              onOpenPlans={() => setActiveTab('plans')}
+              onOpenRecordPayment={() => {
+                setPaymentPreselectedMemberId(undefined);
+                setIsRecordPaymentOpen(true);
+              }}
+              onOpenAttendance={() => setActiveTab('attendance')}
+            />
+
             {/* B. Business Overview with Today's Attendance and Daily Pulse */}
             <BusinessOverview
               state={state}
@@ -924,8 +973,10 @@ export default function App() {
               onOpenAttendance={() => setActiveTab('attendance')}
             />
 
-            {/* C. Quick Actions */}
+            {/* C. Quick Actions (dynamically prioritized by challenges & management method) */}
             <QuickActions
+              challenges={state.onboarding?.challenges}
+              managementMethod={state.onboarding?.managementMethod || state.gym.managementMethod}
               onAddMember={() => {
                 setPreselectedPlanForAddMember({});
                 setIsAddMemberOpen(true);
@@ -1008,6 +1059,8 @@ export default function App() {
         isOpen={isRecordPaymentOpen}
         onClose={() => setIsRecordPaymentOpen(false)}
         members={state.members}
+        acceptedPaymentMethods={state.settings?.acceptedPaymentMethods}
+        defaultPaymentMethod={state.settings?.defaultPaymentMethod}
         initialMemberId={paymentPreselectedMemberId}
         onRecordPayment={recordPayment}
       />

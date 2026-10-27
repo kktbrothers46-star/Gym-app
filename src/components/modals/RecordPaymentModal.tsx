@@ -25,6 +25,8 @@ interface RecordPaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
   members: Member[];
+  acceptedPaymentMethods?: Array<'UPI' | 'Cash' | 'Card' | 'Bank Transfer'>;
+  defaultPaymentMethod?: 'UPI' | 'Cash' | 'Card' | 'Bank Transfer';
   onRecordPayment: (data: {
     memberId: string;
     memberName: string;
@@ -56,6 +58,8 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
   isOpen,
   onClose,
   members,
+  acceptedPaymentMethods,
+  defaultPaymentMethod,
   onRecordPayment,
   initialMemberId,
 }) => {
@@ -74,7 +78,14 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
   );
   const [amount, setAmount] = useState('2000');
   const [paymentMode, setPaymentMode] = useState<'full' | 'partial'>('full');
-  const [method, setMethod] = useState<'UPI' | 'Cash' | 'Card' | 'Bank Transfer' | 'Other'>('UPI');
+  const effectiveDefaultMethod =
+    defaultPaymentMethod ||
+    (acceptedPaymentMethods && acceptedPaymentMethods.length > 0
+      ? acceptedPaymentMethods[0]
+      : 'UPI');
+  const [method, setMethod] = useState<'UPI' | 'Cash' | 'Card' | 'Bank Transfer' | 'Other'>(
+    effectiveDefaultMethod
+  );
   const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [transactionRef, setTransactionRef] = useState('');
   const [notes, setNotes] = useState('');
@@ -107,6 +118,7 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
     setNotes('');
     setMemberSearchQuery('');
     setPaymentDate(new Date().toISOString().split('T')[0]);
+    setMethod(effectiveDefaultMethod);
     const targetId = initialMemberId || sortedMembers[0]?.id || '';
     setSelectedMemberId(targetId);
     const mem = members.find((m) => m.id === targetId) || sortedMembers[0];
@@ -118,7 +130,7 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
       setAmount(defaultAmt.toString());
       setPaymentMode('full');
     }
-  }, [initialMemberId, isOpen, members, sortedMembers]);
+  }, [initialMemberId, isOpen, members, sortedMembers, effectiveDefaultMethod]);
 
   if (!isOpen) return null;
 
@@ -424,11 +436,18 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
                 </div>
               </div>
 
-              {/* Payment Method Selector — All 5 methods supported */}
+              {/* Payment Method Selector — highlights owner's configured accepted methods */}
               <div>
-                <label className="block text-[11px] font-semibold text-[#191919] mb-1">
-                  Payment Method
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[11px] font-semibold text-[#191919]">
+                    Payment Method
+                  </label>
+                  {acceptedPaymentMethods && acceptedPaymentMethods.length > 0 && (
+                    <span className="text-[10px] text-[#102A71] font-semibold bg-[#EEF2FF] px-1.5 py-0.5 rounded-md">
+                      Configured: {acceptedPaymentMethods.join(' • ')}
+                    </span>
+                  )}
+                </div>
                 <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
                   {(
                     [
@@ -440,19 +459,28 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
                     ] as const
                   ).map((item) => {
                     const Icon = item.icon;
+                    const isConfiguredAccepted =
+                      !acceptedPaymentMethods ||
+                      acceptedPaymentMethods.length === 0 ||
+                      acceptedPaymentMethods.includes(item.id as any);
                     return (
                       <button
                         type="button"
                         key={item.id}
                         onClick={() => setMethod(item.id)}
-                        className={`py-1.5 px-1.5 rounded-xl border text-[11px] font-semibold transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
+                        className={`relative py-1.5 px-1.5 rounded-xl border text-[11px] font-semibold transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
                           method === item.id
-                            ? 'bg-[#EFF6FF] border-[#102A71] text-[#102A71] shadow-2xs font-bold'
-                            : 'bg-white border-[#E5E0D6] text-[#4B5563] hover:bg-[#FAF8F5]'
+                            ? 'bg-[#EFF6FF] border-[#102A71] text-[#102A71] shadow-2xs font-bold ring-1 ring-[#102A71]/20'
+                            : isConfiguredAccepted
+                            ? 'bg-white border-[#CBD5E1] text-[#1E293B] hover:bg-[#FAF8F5]'
+                            : 'bg-[#F8FAFC] border-[#E2E8F0] text-[#94A3B8] hover:bg-white'
                         }`}
                       >
                         <Icon className="w-3.5 h-3.5" />
                         <span>{item.label}</span>
+                        {isConfiguredAccepted && acceptedPaymentMethods && acceptedPaymentMethods.length > 0 && (
+                          <span className="text-[8.5px] font-bold text-[#16A34A] leading-none">✓</span>
+                        )}
                       </button>
                     );
                   })}

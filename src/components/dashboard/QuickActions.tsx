@@ -15,6 +15,8 @@ import {
 } from 'lucide-react';
 
 interface QuickActionsProps {
+  challenges?: string[];
+  managementMethod?: string;
   onAddMember: () => void;
   onRecordPayment: () => void;
   onRenewMembership: () => void;
@@ -25,6 +27,8 @@ interface QuickActionsProps {
 }
 
 export const QuickActions: React.FC<QuickActionsProps> = ({
+  challenges = [],
+  managementMethod = '',
   onAddMember,
   onRecordPayment,
   onRenewMembership,
@@ -33,28 +37,49 @@ export const QuickActions: React.FC<QuickActionsProps> = ({
   onOpenDailyCollection,
   onOpenPaymentPromises,
 }) => {
-  const actions = [
+  // Determine dynamic priority based on Question 5 (Management Challenges)
+  const isRenewalsPriority = challenges.some((c) =>
+    c.toLowerCase().includes('expiry') || c.toLowerCase().includes('renewal')
+  );
+  const isPaymentsPriority = challenges.some((c) =>
+    c.toLowerCase().includes('payment') || c.toLowerCase().includes('balance')
+  );
+  const isFinancePriority = challenges.some((c) =>
+    c.toLowerCase().includes('income') || c.toLowerCase().includes('expense')
+  );
+
+  const baseActions = [
     {
+      id: 'member',
       label: 'Add Member',
       icon: UserPlus,
       onClick: onAddMember,
+      priority: 2,
     },
     {
+      id: 'payment',
       label: 'Record Payment',
       icon: CreditCard,
       onClick: onRecordPayment,
+      priority: isPaymentsPriority ? 0 : 1,
     },
     {
+      id: 'renewal',
       label: 'Renew Membership',
       icon: RefreshCw,
       onClick: onRenewMembership,
+      priority: isRenewalsPriority ? 0 : 3,
     },
     {
+      id: 'expense',
       label: 'Add Expense',
       icon: Receipt,
       onClick: onAddExpense,
+      priority: isFinancePriority ? 1 : 4,
     },
   ];
+
+  const actions = [...baseActions].sort((a, b) => a.priority - b.priority);
 
   return (
     <section className="w-full mt-3.5 sm:mt-4">
@@ -92,10 +117,19 @@ export const QuickActions: React.FC<QuickActionsProps> = ({
             <button
               type="button"
               onClick={onOpenImportMembers}
-              className="py-1.5 px-2 rounded-xl bg-white hover:bg-[#FAF8F5] border border-[#EAE5DC] text-[10.5px] sm:text-[11px] font-semibold text-[#191919] flex items-center justify-center gap-1 cursor-pointer shadow-2xs truncate"
+              className={`py-1.5 px-2 rounded-xl border text-[10.5px] sm:text-[11px] font-semibold flex items-center justify-center gap-1 cursor-pointer shadow-2xs truncate transition-all ${
+                managementMethod.toLowerCase().includes('excel') ||
+                managementMethod.toLowerCase().includes('spreadsheet')
+                  ? 'bg-[#EEF2FF] hover:bg-[#E0E7FF] border-[#93C5FD] text-[#102A71] font-bold ring-1 ring-[#102A71]/15'
+                  : 'bg-white hover:bg-[#FAF8F5] border-[#EAE5DC] text-[#191919]'
+              }`}
             >
               <Upload className="w-3 h-3 text-[#102A71] shrink-0" />
-              <span className="truncate">Import CSV/XLSX</span>
+              <span className="truncate">
+                {managementMethod.toLowerCase().includes('excel')
+                  ? 'Import Excel/CSV ★'
+                  : 'Import CSV/XLSX'}
+              </span>
             </button>
           )}
           {onOpenDailyCollection && (

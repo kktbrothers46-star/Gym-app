@@ -35,6 +35,7 @@ export type ReportTabType =
   | 'notifications';
 
 interface RetentionReportScreenProps {
+  gymName?: string;
   members: Member[];
   renewals: RenewalRecord[];
   isEmptyState?: boolean;
@@ -100,6 +101,7 @@ function getInitials(name: string): string {
 }
 
 export const RetentionReportScreen: React.FC<RetentionReportScreenProps> = ({
+  gymName = 'our gym',
   members,
   renewals,
   isEmptyState = false,
@@ -1031,7 +1033,7 @@ export const RetentionReportScreen: React.FC<RetentionReportScreenProps> = ({
             {atRiskMembers.slice(0, 6).map(({ member, riskType }) => {
               const cleanPhone = member.phone.replace(/[^0-9]/g, '');
               const waLink = `https://wa.me/91${cleanPhone.slice(-10)}?text=${encodeURIComponent(
-                `Hi ${member.name}, checking in from MuscleFit Gym! Let us know how your workouts are going.`
+                `Hi ${member.name}, checking in from ${gymName}! Let us know how your workouts are going.`
               )}`;
 
               const badgeStyle =

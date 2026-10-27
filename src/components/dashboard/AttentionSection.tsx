@@ -115,7 +115,22 @@ export const AttentionSection: React.FC<AttentionSectionProps> = ({
     };
   }, [isEmptyState, members, followUpTasks, leads, todayIso]);
 
-  const cards = [
+  const userChallenges = state.onboarding?.challenges || [];
+
+  const isRenewalPriority = userChallenges.some((c) =>
+    c.toLowerCase().includes('expiry') || c.toLowerCase().includes('renewal')
+  );
+  const isPaymentPriority = userChallenges.some((c) =>
+    c.toLowerCase().includes('payment') || c.toLowerCase().includes('balance')
+  );
+  const isInactivePriority = userChallenges.some((c) =>
+    c.toLowerCase().includes('inactive') || c.toLowerCase().includes('retention')
+  );
+  const isAttendancePriority = userChallenges.some((c) =>
+    c.toLowerCase().includes('attendance')
+  );
+
+  const rawCards = [
     {
       key: 'renewals' as const,
       title: 'Expiring in 7 Days',
@@ -128,6 +143,8 @@ export const AttentionSection: React.FC<AttentionSectionProps> = ({
       iconColorClass: 'text-[#D97706]',
       arrowBgClass: 'bg-[#EFE0BA] text-[#5C4822]',
       Icon: Clock,
+      isPriority: isRenewalPriority,
+      priorityRank: isRenewalPriority ? 0 : 2,
     },
     {
       key: 'pending_payments' as const,
@@ -145,6 +162,8 @@ export const AttentionSection: React.FC<AttentionSectionProps> = ({
       iconColorClass: 'text-[#DC2626]',
       arrowBgClass: 'bg-[#F0CACA] text-[#642626]',
       Icon: CreditCard,
+      isPriority: isPaymentPriority,
+      priorityRank: isPaymentPriority ? 0 : 1,
     },
     {
       key: 'inactive_members' as const,
@@ -156,6 +175,8 @@ export const AttentionSection: React.FC<AttentionSectionProps> = ({
       iconColorClass: 'text-[#7C3AED]',
       arrowBgClass: 'bg-[#DEC9F4] text-[#482778]',
       Icon: UserX,
+      isPriority: isInactivePriority || isAttendancePriority,
+      priorityRank: isInactivePriority || isAttendancePriority ? 0 : 3,
     },
     {
       key: 'follow_ups' as const,
@@ -167,8 +188,12 @@ export const AttentionSection: React.FC<AttentionSectionProps> = ({
       iconColorClass: 'text-[#2563EB]',
       arrowBgClass: 'bg-[#C4DBF4] text-[#1E3F72]',
       Icon: PhoneCall,
+      isPriority: false,
+      priorityRank: 4,
     },
   ];
+
+  const cards = [...rawCards].sort((a, b) => a.priorityRank - b.priorityRank);
 
   // Build consolidated, urgency-sorted Daily Action List categories without duplicate tasks
   const consolidatedActions = useMemo<ConsolidatedActionRow[]>(() => {
@@ -423,12 +448,19 @@ export const AttentionSection: React.FC<AttentionSectionProps> = ({
               onClick={() => onSelectCategory?.(card.key)}
               className={`${card.bgClass} rounded-xl sm:rounded-2xl p-2.5 sm:p-3 flex flex-col justify-between text-left border transition-all hover:brightness-98 active:scale-[0.99] cursor-pointer shadow-2xs`}
             >
-              <div
-                className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg ${card.iconBgClass} flex items-center justify-center shrink-0`}
-              >
-                <IconComponent
-                  className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${card.iconColorClass} stroke-[2.2]`}
-                />
+              <div className="flex items-center justify-between w-full">
+                <div
+                  className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg ${card.iconBgClass} flex items-center justify-center shrink-0`}
+                >
+                  <IconComponent
+                    className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${card.iconColorClass} stroke-[2.2]`}
+                  />
+                </div>
+                {card.isPriority && (
+                  <span className="text-[9px] font-bold text-[#102A71] bg-white/85 border border-[#102A71]/20 px-1.5 py-0.5 rounded-md shadow-2xs">
+                    Priority
+                  </span>
+                )}
               </div>
 
               <div className="mt-2 sm:mt-2.5">

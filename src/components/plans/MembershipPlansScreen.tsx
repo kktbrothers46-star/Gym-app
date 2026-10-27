@@ -29,13 +29,14 @@ import {
   Flame,
   Sliders,
 } from 'lucide-react';
-import { MembershipPlan, Member } from '../../types/dashboard';
+import { MembershipPlan, Member, OnboardingPreferences } from '../../types/dashboard';
 import { PlanFilterModal, PlanFilterOptions } from './PlanFilterModal';
 import { PlanFormModal } from './PlanFormModal';
 
 interface MembershipPlansScreenProps {
   plans: MembershipPlan[];
   members: Member[];
+  onboarding?: OnboardingPreferences;
   isEmptyState?: boolean;
   onAddPlan: (planData: Omit<MembershipPlan, 'id' | 'code' | 'createdAt'>) => void;
   onUpdatePlan: (planId: string, updates: Partial<MembershipPlan>) => void;
@@ -49,6 +50,7 @@ interface MembershipPlansScreenProps {
 export const MembershipPlansScreen: React.FC<MembershipPlansScreenProps> = ({
   plans,
   members,
+  onboarding,
   isEmptyState = false,
   onAddPlan,
   onUpdatePlan,
@@ -234,6 +236,93 @@ export const MembershipPlansScreen: React.FC<MembershipPlansScreenProps> = ({
       durationRange: 'all',
     });
   };
+
+  // Question 6: Suggested plan templates derived directly from onboarding choices
+  const suggestedPlanTemplates = useMemo(() => {
+    if (!onboarding?.offeredPlans || onboarding.offeredPlans.length === 0) return [];
+    if (onboarding.offeredPlans.includes("Haven't created plans yet")) return [];
+
+    const definitions = [
+      {
+        match: 'Monthly',
+        name: 'Monthly Membership',
+        durationValue: 1,
+        durationUnit: 'months' as const,
+        durationDays: 30,
+        durationLabel: '1 Month (30 Days)',
+        category: 'General' as const,
+        isCustom: false,
+      },
+      {
+        match: 'Quarterly',
+        name: 'Quarterly Package',
+        durationValue: 3,
+        durationUnit: 'months' as const,
+        durationDays: 90,
+        durationLabel: '3 Months (90 Days)',
+        category: 'General' as const,
+        isCustom: false,
+      },
+      {
+        match: 'Half-yearly',
+        name: 'Half-Yearly Membership',
+        durationValue: 6,
+        durationUnit: 'months' as const,
+        durationDays: 180,
+        durationLabel: '6 Months (180 Days)',
+        category: 'General' as const,
+        isCustom: false,
+      },
+      {
+        match: 'Annual',
+        name: 'Annual Membership',
+        durationValue: 12,
+        durationUnit: 'months' as const,
+        durationDays: 365,
+        durationLabel: '12 Months (365 Days)',
+        category: 'General' as const,
+        isCustom: false,
+      },
+    ];
+
+    const results = [];
+    for (const def of definitions) {
+      if (onboarding.offeredPlans.includes(def.match)) {
+        const alreadyExists = effectivePlans.some(
+          (p) =>
+            p.durationDays === def.durationDays ||
+            p.name.toLowerCase().includes(def.match.toLowerCase())
+        );
+        if (!alreadyExists) {
+          results.push(def);
+        }
+      }
+    }
+
+    if (
+      onboarding.offeredPlans.includes('Custom duration') &&
+      onboarding.customPlanDuration?.trim()
+    ) {
+      const customName = onboarding.customPlanDuration.trim();
+      const alreadyExists = effectivePlans.some((p) =>
+        p.name.toLowerCase().includes(customName.toLowerCase())
+      );
+      if (!alreadyExists) {
+        results.push({
+          match: 'Custom duration',
+          name: customName,
+          durationValue: 30,
+          durationUnit: 'days' as const,
+          durationDays: 30,
+          durationLabel: customName,
+          category: 'Custom' as const,
+          isCustom: true,
+        });
+      }
+    }
+
+    return results;
+  }, [onboarding?.offeredPlans, onboarding?.customPlanDuration, effectivePlans]);
 
   const handleOpenCreatePlan = () => {
     setEditingPlan(null);
@@ -534,6 +623,69 @@ export const MembershipPlansScreen: React.FC<MembershipPlansScreenProps> = ({
       {/* ============================================================== */}
       {/* F. MEMBERSHIP PLAN CARDS LIST                                  */}
       {/* ============================================================== */}
+      {/* Question 6: Setup Plan Suggestions based on Onboarding Choices */}
+      {suggestedPlanTemplates.length > 0 && (
+        <div className="p-3 bg-white rounded-xl sm:rounded-2xl border border-[#DCE6FC] bg-radial from-[#F8FAFD] to-white shadow-2xs space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-[#102A71]" />
+              <h3 className="text-[12.5px] font-bold text-[#102A71]">
+                Suggested Packages from Your Setup
+              </h3>
+            </div>
+            <span className="text-[10px] font-semibold text-[#102A71] bg-[#EEF2FF] px-2 py-0.5 rounded-full">
+              {suggestedPlanTemplates.length} to activate
+            </span>
+          </div>
+          <p className="text-[11px] text-[#64748B]">
+            You selected these durations during gym onboarding. Tap to set your real fee and activate:
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-0.5">
+            {suggestedPlanTemplates.map((tpl) => (
+              <div
+                key={tpl.name}
+                className="p-2.5 rounded-xl bg-white border border-[#E2E8F0] flex items-center justify-between gap-2 shadow-2xs hover:border-[#102A71]/30 transition-all"
+              >
+                <div className="min-w-0">
+                  <div className="text-[12px] font-bold text-[#191919] truncate">
+                    {tpl.name}
+                  </div>
+                  <div className="text-[10.5px] text-[#64748B] truncate">
+                    {tpl.durationLabel}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingPlan({
+                      id: '',
+                      code: `PLN00${effectivePlans.length + 1}`,
+                      name: tpl.name,
+                      durationValue: tpl.durationValue,
+                      durationUnit: tpl.durationUnit,
+                      durationDays: tpl.durationDays,
+                      durationLabel: tpl.durationLabel,
+                      price: 0,
+                      status: 'active',
+                      isCustom: tpl.isCustom,
+                      description: `Includes ${tpl.durationLabel} validity with gym floor access.`,
+                      features: ['Gym Floor Access', 'Cardio & Strength Zone'],
+                      createdAt: new Date().toISOString(),
+                      category: tpl.category,
+                    });
+                    setIsPlanFormOpen(true);
+                  }}
+                  className="px-2.5 py-1.5 rounded-lg bg-[#102A71] hover:bg-[#0D225D] active:scale-95 text-white text-[11px] font-semibold flex items-center gap-1 cursor-pointer shrink-0 shadow-2xs"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>Set Fee & Activate</span>
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="space-y-2 sm:space-y-2.5">
         {effectivePlans.length === 0 ? (
           /* Real Empty State when gym has 0 plans */

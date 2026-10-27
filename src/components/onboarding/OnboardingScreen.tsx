@@ -177,13 +177,22 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
   onCompleteOnboarding,
   onBackToSplash,
 }) => {
-  // Resume from saved step or initialStep if provided
+  const isRoleSelectionOnly = initialStep === 'role';
+
+  // Resume from saved step or initialStep if provided (never show pre-auth role steps to authenticated owner onboarding)
   const [step, setStep] = useState<StepId>(() => {
     if (initialStep) return initialStep;
-    if (onboarding?.currentStep && !onboarding.hasCompletedOnboarding) {
-      return onboarding.currentStep;
+    const savedStep = onboarding?.currentStep;
+    if (
+      savedStep &&
+      !onboarding?.hasCompletedOnboarding &&
+      savedStep !== 'welcome' &&
+      savedStep !== 'role' &&
+      savedStep !== 'member_coming_soon'
+    ) {
+      return savedStep;
     }
-    return 'welcome';
+    return 'gym_name';
   });
 
   // Track horizontal slide direction ('forward' | 'backward') and reduced-motion preference
@@ -212,11 +221,13 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
 
   // Screen 2: Role selection ('owner' | 'member' | null)
   const [selectedRole, setSelectedRole] = useState<'owner' | 'member' | null>(
-    onboarding?.selectedRole ?? null
+    isRoleSelectionOnly ? (onboarding?.selectedRole ?? null) : 'owner'
   );
 
   // Screen 4: Gym Name
-  const [gymName, setGymName] = useState<string>(onboarding?.gymName ?? '');
+  const [gymName, setGymName] = useState<string>(
+    onboarding?.gymName || (gym?.name && gym.name !== 'My Gym' ? gym.name : '')
+  );
   const [gymNameTouched, setGymNameTouched] = useState<boolean>(false);
 
   // Screen 5: Member Count (Single-select + Custom)
@@ -255,11 +266,19 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
     onboarding?.customPaymentMethod ?? ''
   );
 
-  // Persist current state whenever answers or step change
+  // Sync gymName if gym profile loads asynchronously from Firestore
   useEffect(() => {
+    if (!gymName && gym?.name && gym.name !== 'My Gym') {
+      setGymName(gym.name);
+    }
+  }, [gym?.name]);
+
+  // Persist current state whenever answers or step change (only during actual post-auth owner onboarding)
+  useEffect(() => {
+    if (isRoleSelectionOnly) return;
     onSaveProgress({
       currentStep: step,
-      selectedRole,
+      selectedRole: 'owner',
       gymName,
       memberCountOption,
       customMemberCount,
@@ -273,6 +292,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
       customPaymentMethod,
     });
   }, [
+    isRoleSelectionOnly,
     step,
     selectedRole,
     gymName,
@@ -323,13 +343,15 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
         onBackToSplash();
         break;
       case 'role':
-        navigateToStep('welcome', 'backward');
+        onBackToSplash();
         break;
       case 'member_coming_soon':
         navigateToStep('role', 'backward');
         break;
       case 'gym_name':
-        navigateToStep('role', 'backward');
+        if (isRoleSelectionOnly) {
+          navigateToStep('role', 'backward');
+        }
         break;
       case 'member_count':
         navigateToStep('gym_name', 'backward');
@@ -352,7 +374,44 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
     }
   };
 
-  // Continue button handler
+  // Custom option add handlers that save the user's custom entry into state without navigating away
+  const handleAddCustomMemberCount = () => {
+    const val = customMemberCount.trim() || 'Custom';
+    setCustomMemberCount(val);
+    setMemberCountOption('Other / Custom');
+  };
+
+  const handleAddCustomManagementMethod = () => {
+    const val = customManagementMethod.trim() || 'Custom method';
+    setCustomManagementMethod(val);
+    setManagementMethod('Other / Custom');
+  };
+
+  const handleAddCustomChallenge = () => {
+    const val = customChallenge.trim() || 'Custom challenge';
+    setCustomChallenge(val);
+    if (!challenges.includes('Other / Custom')) {
+      setChallenges((prev) => [...prev, 'Other / Custom']);
+    }
+  };
+
+  const handleAddCustomPlanDuration = () => {
+    const val = customPlanDuration.trim() || 'Custom duration';
+    setCustomPlanDuration(val);
+    if (!offeredPlans.includes('Custom duration')) {
+      setOfferedPlans((prev) => [...prev, 'Custom duration']);
+    }
+  };
+
+  const handleAddCustomPaymentMethod = () => {
+    const val = customPaymentMethod.trim() || 'Custom payment method';
+    setCustomPaymentMethod(val);
+    if (!paymentMethods.includes('Other / Custom')) {
+      setPaymentMethods((prev) => [...prev, 'Other / Custom']);
+    }
+  };
+
+  // Continue button handler — advances to the next step when the user is ready
   const handleContinue = () => {
     if (!isStepValid()) {
       if (step === 'gym_name') setGymNameTouched(true);
@@ -381,18 +440,33 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
         navigateToStep('member_count', 'forward');
         break;
       case 'member_count':
+        if (memberCountOption === 'Other / Custom' && !customMemberCount.trim()) {
+          setCustomMemberCount('Custom');
+        }
         navigateToStep('management_method', 'forward');
         break;
       case 'management_method':
+        if (managementMethod === 'Other / Custom' && !customManagementMethod.trim()) {
+          setCustomManagementMethod('Custom method');
+        }
         navigateToStep('challenges', 'forward');
         break;
       case 'challenges':
+        if (challenges.includes('Other / Custom') && !customChallenge.trim()) {
+          setCustomChallenge('Custom challenge');
+        }
         navigateToStep('plans', 'forward');
         break;
       case 'plans':
+        if (offeredPlans.includes('Custom duration') && !customPlanDuration.trim()) {
+          setCustomPlanDuration('Custom duration');
+        }
         navigateToStep('payment_methods', 'forward');
         break;
       case 'payment_methods':
+        if (paymentMethods.includes('Other / Custom') && !customPaymentMethod.trim()) {
+          setCustomPaymentMethod('Custom payment method');
+        }
         navigateToStep('complete', 'forward');
         break;
       case 'complete':
@@ -684,32 +758,14 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
                       : 'bg-white border-[#E5E7EB] hover:border-[#CBD5E1]'
                   }`}
                 >
-                  {/* Gym Storefront Illustration */}
-                  <div className="w-[72px] h-[72px] rounded-xl bg-[#EEF2FF] border border-[#E0E7FF] flex items-center justify-center shrink-0 overflow-hidden">
-                    <svg className="w-16 h-16" viewBox="0 0 80 80" fill="none">
-                      <ellipse cx="40" cy="68" rx="32" ry="5" fill="#CBD5E1" />
-                      {/* Building body */}
-                      <rect x="14" y="26" width="52" height="40" rx="3" fill="#334155" />
-                      <rect x="18" y="34" width="22" height="32" fill="#1E293B" />
-                      <rect x="44" y="34" width="18" height="32" fill="#0F172A" />
-                      {/* Warm interior glow */}
-                      <rect x="20" y="36" width="18" height="28" fill="#F59E0B" fillOpacity="0.35" />
-                      <rect x="46" y="36" width="14" height="28" fill="#38BDF8" fillOpacity="0.25" />
-                      {/* Roof fascia & GYM sign */}
-                      <rect x="11" y="20" width="58" height="9" rx="2" fill="#1E3A8A" />
-                      <rect x="25" y="14" width="30" height="11" rx="2.5" fill="#0F172A" stroke="#F97316" strokeWidth="1.5" />
-                      <text
-                        x="40"
-                        y="22"
-                        textAnchor="middle"
-                        fill="#FFFFFF"
-                        fontSize="7.5"
-                        fontWeight="800"
-                        fontFamily="sans-serif"
-                      >
-                        GYM
-                      </text>
-                    </svg>
+                  {/* Gym Owner Illustration */}
+                  <div className="w-[72px] h-[72px] rounded-xl bg-white border border-[#E2E8F0] flex items-center justify-center shrink-0 overflow-hidden p-1">
+                    <img
+                      src="/images/IMG_da965a2b-bf61-42b1-89f9-fb805281c804.jpg"
+                      alt="Gym Owner illustration"
+                      className="w-full h-full object-contain"
+                      loading="eager"
+                    />
                   </div>
 
                   <div className="flex-1 min-w-0">
@@ -748,28 +804,13 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
                   }`}
                 >
                   {/* Gym Member Illustration */}
-                  <div className="w-[72px] h-[72px] rounded-xl bg-[#F1F5F9] border border-[#E2E8F0] flex items-center justify-center shrink-0 overflow-hidden">
-                    <svg className="w-16 h-16" viewBox="0 0 80 80" fill="none">
-                      <circle cx="40" cy="40" r="30" fill="#E0E7FF" />
-                      {/* Shoulders / Torso */}
-                      <path
-                        d="M20 72C20 58 28 52 40 52C52 52 60 58 60 72"
-                        fill="#1E293B"
-                      />
-                      {/* White Gym Towel on shoulder */}
-                      <path
-                        d="M27 53C27 53 32 56 32 70H23C23 60 25 54 27 53Z"
-                        fill="#FFFFFF"
-                      />
-                      {/* Neck & Head */}
-                      <rect x="35" y="42" width="10" height="12" rx="4" fill="#FDBA74" />
-                      <circle cx="40" cy="33" r="11" fill="#FDBA74" />
-                      {/* Hair */}
-                      <path
-                        d="M29 31C29 23 34 19 42 19C48 19 52 23 51 31C48 27 44 26 39 26C34 26 31 28 29 31Z"
-                        fill="#0F172A"
-                      />
-                    </svg>
+                  <div className="w-[72px] h-[72px] rounded-xl bg-white border border-[#E2E8F0] flex items-center justify-center shrink-0 overflow-hidden p-1">
+                    <img
+                      src="/images/IMG_c3196f6c-d45d-40f9-8eef-88c7eb06ed87.jpg"
+                      alt="Gym Member illustration"
+                      className="w-full h-full object-contain"
+                      loading="eager"
+                    />
                   </div>
 
                   <div className="flex-1 min-w-0">
@@ -1092,10 +1133,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             e.preventDefault();
-                            if (!customMemberCount.trim()) {
-                              setCustomMemberCount('Custom');
-                            }
-                            handleContinue();
+                            handleAddCustomMemberCount();
                           }
                         }}
                         placeholder="Enter your member count, range, or answer..."
@@ -1104,12 +1142,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
                       />
                       <button
                         type="button"
-                        onClick={() => {
-                          if (!customMemberCount.trim()) {
-                            setCustomMemberCount('Custom');
-                          }
-                          handleContinue();
-                        }}
+                        onClick={handleAddCustomMemberCount}
                         className="h-[44px] px-4 rounded-xl bg-[#0B3A82] hover:bg-[#092E6B] active:scale-95 transition-all text-white text-[13.5px] font-semibold flex items-center justify-center gap-1.5 shrink-0 cursor-pointer shadow-xs"
                       >
                         <Check className="w-4 h-4 stroke-[2.5]" />
@@ -1120,7 +1153,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
                     {customMemberCount.trim() && (
                       <div className="flex items-center gap-1.5 px-1 text-[12px] text-[#0B3A82] font-medium">
                         <CheckCircle2 className="w-3.5 h-3.5 text-[#0B3A82]" />
-                        <span>Added: &ldquo;{customMemberCount}&rdquo;</span>
+                        <span>Added: &ldquo;{customMemberCount.trim()}&rdquo;</span>
                       </div>
                     )}
                   </div>
@@ -1277,7 +1310,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
                   </button>
 
                   {managementMethod === 'Other / Custom' && (
-                    <div className="px-3 pb-2.5 pt-0.5 space-y-1.5">
+                    <div className="px-3 pb-2.5 pt-0.5 space-y-2">
                       <div className="flex items-center gap-2">
                         <input
                           type="text"
@@ -1286,10 +1319,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') {
                               e.preventDefault();
-                              if (!customManagementMethod.trim()) {
-                                setCustomManagementMethod('Custom method');
-                              }
-                              handleContinue();
+                              handleAddCustomManagementMethod();
                             }
                           }}
                           placeholder="Describe how you currently manage records..."
@@ -1298,18 +1328,20 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
                         />
                         <button
                           type="button"
-                          onClick={() => {
-                            if (!customManagementMethod.trim()) {
-                              setCustomManagementMethod('Custom method');
-                            }
-                            handleContinue();
-                          }}
-                          className="h-[36px] px-3 rounded-lg bg-[#0F347C] hover:bg-[#1E3A8A] text-white text-[12px] font-semibold flex items-center justify-center gap-1 shrink-0 cursor-pointer"
+                          onClick={handleAddCustomManagementMethod}
+                          className="h-[36px] px-3 rounded-lg bg-[#0F347C] hover:bg-[#1E3A8A] active:scale-95 transition-all text-white text-[12px] font-semibold flex items-center justify-center gap-1 shrink-0 cursor-pointer shadow-2xs"
                         >
-                          <Check className="w-3.5 h-3.5" />
+                          <Check className="w-3.5 h-3.5 stroke-[2.5]" />
                           <span>Add</span>
                         </button>
                       </div>
+
+                      {customManagementMethod.trim() && (
+                        <div className="flex items-center gap-1.5 px-1 text-[12px] text-[#0B3A82] font-medium">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-[#0B3A82]" />
+                          <span>Added: &ldquo;{customManagementMethod.trim()}&rdquo;</span>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1435,7 +1467,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
                   </button>
 
                   {challenges.includes('Other / Custom') && (
-                    <div className="px-3 pb-2.5 pt-0.5 space-y-1.5">
+                    <div className="px-3 pb-2.5 pt-0.5 space-y-2">
                       <div className="flex items-center gap-2">
                         <input
                           type="text"
@@ -1444,10 +1476,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') {
                               e.preventDefault();
-                              if (!customChallenge.trim()) {
-                                setCustomChallenge('Custom challenge');
-                              }
-                              handleContinue();
+                              handleAddCustomChallenge();
                             }
                           }}
                           placeholder="Enter another area you want to improve..."
@@ -1456,18 +1485,20 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
                         />
                         <button
                           type="button"
-                          onClick={() => {
-                            if (!customChallenge.trim()) {
-                              setCustomChallenge('Custom challenge');
-                            }
-                            handleContinue();
-                          }}
-                          className="h-[36px] px-3 rounded-lg bg-[#0F347C] hover:bg-[#1E3A8A] text-white text-[12px] font-semibold flex items-center justify-center gap-1 shrink-0 cursor-pointer"
+                          onClick={handleAddCustomChallenge}
+                          className="h-[36px] px-3 rounded-lg bg-[#0F347C] hover:bg-[#1E3A8A] active:scale-95 transition-all text-white text-[12px] font-semibold flex items-center justify-center gap-1 shrink-0 cursor-pointer shadow-2xs"
                         >
-                          <Check className="w-3.5 h-3.5" />
+                          <Check className="w-3.5 h-3.5 stroke-[2.5]" />
                           <span>Add</span>
                         </button>
                       </div>
+
+                      {customChallenge.trim() && (
+                        <div className="flex items-center gap-1.5 px-1 text-[12px] text-[#0B3A82] font-medium">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-[#0B3A82]" />
+                          <span>Added: &ldquo;{customChallenge.trim()}&rdquo;</span>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1629,10 +1660,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           e.preventDefault();
-                          if (!customPlanDuration.trim()) {
-                            setCustomPlanDuration('Custom duration');
-                          }
-                          handleContinue();
+                          handleAddCustomPlanDuration();
                         }
                       }}
                       placeholder="e.g. 15 Days Trial, 45 Days Transformation"
@@ -1641,18 +1669,20 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
                     />
                     <button
                       type="button"
-                      onClick={() => {
-                        if (!customPlanDuration.trim()) {
-                          setCustomPlanDuration('Custom duration');
-                        }
-                        handleContinue();
-                      }}
-                      className="h-[36px] px-3 rounded-lg bg-[#0F347C] hover:bg-[#1E3A8A] text-white text-[12px] font-semibold flex items-center justify-center gap-1 shrink-0 cursor-pointer"
+                      onClick={handleAddCustomPlanDuration}
+                      className="h-[36px] px-3 rounded-lg bg-[#0F347C] hover:bg-[#1E3A8A] active:scale-95 transition-all text-white text-[12px] font-semibold flex items-center justify-center gap-1 shrink-0 cursor-pointer shadow-2xs"
                     >
-                      <Check className="w-3.5 h-3.5" />
+                      <Check className="w-3.5 h-3.5 stroke-[2.5]" />
                       <span>Add</span>
                     </button>
                   </div>
+
+                  {customPlanDuration.trim() && (
+                    <div className="flex items-center gap-1.5 px-1 text-[12px] text-[#0B3A82] font-medium">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-[#0B3A82]" />
+                      <span>Added: &ldquo;{customPlanDuration.trim()}&rdquo;</span>
+                    </div>
+                  )}
                 </div>
               )}
             </main>
@@ -1795,7 +1825,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
                   </button>
 
                   {paymentMethods.includes('Other / Custom') && (
-                    <div className="px-3.5 pb-2.5 pt-0.5 space-y-1.5">
+                    <div className="px-3.5 pb-2.5 pt-0.5 space-y-2">
                       <div className="flex items-center gap-2">
                         <input
                           type="text"
@@ -1804,10 +1834,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') {
                               e.preventDefault();
-                              if (!customPaymentMethod.trim()) {
-                                setCustomPaymentMethod('Custom payment method');
-                              }
-                              handleContinue();
+                              handleAddCustomPaymentMethod();
                             }
                           }}
                           placeholder="e.g. Cheque, Paytm POS, Razorpay link..."
@@ -1816,18 +1843,20 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
                         />
                         <button
                           type="button"
-                          onClick={() => {
-                            if (!customPaymentMethod.trim()) {
-                              setCustomPaymentMethod('Custom payment method');
-                            }
-                            handleContinue();
-                          }}
-                          className="h-[36px] px-3 rounded-lg bg-[#0F347C] hover:bg-[#1E3A8A] text-white text-[12px] font-semibold flex items-center justify-center gap-1 shrink-0 cursor-pointer"
+                          onClick={handleAddCustomPaymentMethod}
+                          className="h-[36px] px-3 rounded-lg bg-[#0F347C] hover:bg-[#1E3A8A] active:scale-95 transition-all text-white text-[12px] font-semibold flex items-center justify-center gap-1 shrink-0 cursor-pointer shadow-2xs"
                         >
-                          <Check className="w-3.5 h-3.5" />
+                          <Check className="w-3.5 h-3.5 stroke-[2.5]" />
                           <span>Add</span>
                         </button>
                       </div>
+
+                      {customPaymentMethod.trim() && (
+                        <div className="flex items-center gap-1.5 px-1 text-[12px] text-[#0B3A82] font-medium">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-[#0B3A82]" />
+                          <span>Added: &ldquo;{customPaymentMethod.trim()}&rdquo;</span>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

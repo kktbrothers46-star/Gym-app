@@ -310,6 +310,116 @@ export const BusinessOverview: React.FC<BusinessOverviewProps> = ({
           );
         })()}
 
+        {/* CARD 5: Total Amount After Expenses */}
+        {(() => {
+          const now = new Date();
+          const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+          const currentShortMonthLabel = now.toLocaleDateString('en-IN', {
+            month: 'short',
+            year: 'numeric',
+          });
+
+          const totalExpensesThisMonth = state.isEmptyState
+            ? 0
+            : (state.expenses || [])
+                .filter(
+                  (e) =>
+                    e.status !== 'unpaid' &&
+                    ((e.date && e.date.startsWith(currentYearMonth)) ||
+                      e.month === currentShortMonthLabel)
+                )
+                .reduce((sum, e) => sum + (e.amount || 0), 0);
+
+          const netAmountAfterExpenses = state.isEmptyState
+            ? 0
+            : state.collectedThisMonth - totalExpensesThisMonth;
+
+          const isNegative = netAmountAfterExpenses < 0;
+          const formattedNet = isNegative
+            ? `-₹${Math.abs(netAmountAfterExpenses).toLocaleString('en-IN')}`
+            : formatCurrency(netAmountAfterExpenses);
+
+          return (
+            <div
+              onClick={onOpenProfitReport}
+              className={`col-span-2 relative rounded-xl sm:rounded-2xl p-3 sm:p-3.5 flex flex-col justify-between transition-all cursor-pointer group border ${
+                isNegative
+                  ? 'bg-[#FEF2F2] border-[#FECACA] hover:border-[#FCA5A5]'
+                  : 'bg-[#ECFEFF] border-[#CCFBF1] hover:border-[#99F6E4]'
+              } hover:shadow-xs`}
+              role="button"
+              tabIndex={0}
+              aria-label={`Total Amount After Expenses: ${formattedNet}`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-2.5 min-w-0">
+                  <div
+                    className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                      isNegative
+                        ? 'bg-[#FEE2E2] text-[#DC2626]'
+                        : 'bg-[#CCFBF1] text-[#0F766E]'
+                    }`}
+                  >
+                    <BarChart3 className="w-4 h-4 stroke-[2.2]" />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-[#52525B] text-[11.5px] sm:text-[12px] font-semibold block leading-tight">
+                      Total Amount After Expenses
+                    </span>
+                    <div
+                      className={`text-[21px] sm:text-[23px] font-bold tracking-tight leading-none mt-1 ${
+                        isNegative ? 'text-[#DC2626]' : 'text-[#191919]'
+                      }`}
+                    >
+                      {state.isEmptyState ? '₹0' : formattedNet}
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  className={`w-5 h-5 rounded-full bg-white flex items-center justify-center text-[#71717A] border transition-colors shrink-0 ${
+                    isNegative
+                      ? 'border-[#FECACA] group-hover:text-[#DC2626] group-hover:border-[#DC2626]'
+                      : 'border-[#CCFBF1] group-hover:text-[#0F766E] group-hover:border-[#0F766E]'
+                  }`}
+                >
+                  <ChevronRight className="w-3 h-3" />
+                </div>
+              </div>
+
+              <div
+                className={`flex items-center justify-between gap-2 mt-2.5 pt-2 border-t text-[10.5px] sm:text-[11px] ${
+                  isNegative ? 'border-[#FECACA]/70' : 'border-[#CCFBF1]/80'
+                }`}
+              >
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span className="text-[#4B5563] font-medium">
+                    Collected:{' '}
+                    <strong className="text-[#15803D] font-bold">
+                      {state.isEmptyState ? '₹0' : formatCurrency(state.collectedThisMonth)}
+                    </strong>
+                  </span>
+                  <span className="text-[#D4D4D8]">•</span>
+                  <span className="text-[#4B5563] font-medium">
+                    Expenses:{' '}
+                    <strong className="text-[#B45309] font-bold">
+                      {state.isEmptyState ? '₹0' : formatCurrency(totalExpensesThisMonth)}
+                    </strong>
+                  </span>
+                </div>
+
+                <span
+                  className={`font-semibold shrink-0 ${
+                    isNegative ? 'text-[#DC2626]' : 'text-[#0F766E]'
+                  }`}
+                >
+                  {isNegative ? 'Deficit this month' : 'Net balance'}
+                </span>
+              </div>
+            </div>
+          );
+        })()}
+
       </div>
     </section>
   );

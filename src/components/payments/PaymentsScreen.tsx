@@ -542,40 +542,44 @@ export const PaymentsScreen: React.FC<PaymentsScreenProps> = ({
   return (
     <div className="w-full flex-1 pb-3">
       {/* ============================================================== */}
-      {/* A. HEADER: Title, Subtitle, & "+ Record Payment" Button        */}
+      {/* A. HEADER: Title, Subtitle, & Prominent Action Buttons         */}
       {/* ============================================================== */}
-      <header className="w-full flex flex-wrap items-center justify-between gap-2 pt-2.5 pb-2 px-0.5">
+      <header className="w-full flex flex-col gap-2.5 pt-2.5 pb-2 px-0.5">
         <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <h1 className="text-[22px] sm:text-[24px] font-bold text-[#191919] tracking-tight leading-tight">
-              Payments
-            </h1>
-            {onSwitchToExpenses && (
-              <button
-                type="button"
-                onClick={onSwitchToExpenses}
-                className="px-2 py-0.5 rounded-full bg-white/80 hover:bg-white border border-[#EAE5DC] text-[10.5px] font-semibold text-[#4B5563] hover:text-[#102A71] transition-colors cursor-pointer"
-                title="Switch to Gym Expenses"
-              >
-                Expenses →
-              </button>
-            )}
-          </div>
+          <h1 className="text-[22px] sm:text-[24px] font-bold text-[#191919] tracking-tight leading-tight">
+            Payments
+          </h1>
           <p className="text-[#71717A] text-[12px] font-normal mt-0.5 leading-none">
-            Track fee collections, pending balances, and receipts.
+            Track fee collections, pending balances, and gym expenses.
           </p>
         </div>
 
-        {/* Primary "+ Record Payment" Action Button */}
-        <button
-          type="button"
-          onClick={() => onOpenRecordPayment(undefined)}
-          className="flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-[#102A71] hover:bg-[#0D225D] active:scale-95 text-white text-[12px] font-semibold shadow-2xs transition-all cursor-pointer shrink-0"
-          aria-label="Record Payment"
-        >
-          <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-          <span>Record Payment</span>
-        </button>
+        {/* Big Clear Action Row: Record Payment & Expenses */}
+        <div className="grid grid-cols-2 gap-2.5 w-full">
+          <button
+            type="button"
+            onClick={() => onOpenRecordPayment(undefined)}
+            className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#102A71] hover:bg-[#0D225D] active:scale-[0.98] text-white text-[13.5px] sm:text-[14px] font-bold shadow-xs transition-all cursor-pointer"
+            aria-label="Record Payment"
+          >
+            <Plus className="w-4 h-4 stroke-[2.5] shrink-0" />
+            <span>Record Payment</span>
+          </button>
+
+          {onSwitchToExpenses && (
+            <button
+              type="button"
+              onClick={onSwitchToExpenses}
+              className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-white hover:bg-[#EEF2FF] active:scale-[0.98] border-2 border-[#102A71] text-[#102A71] text-[13.5px] sm:text-[14px] font-bold shadow-xs transition-all cursor-pointer"
+              title="Open Gym Expenses"
+              aria-label="Open Gym Expenses"
+            >
+              <Receipt className="w-4 h-4 stroke-[2.3] shrink-0" />
+              <span>Expenses</span>
+              <ChevronRight className="w-4 h-4 stroke-[2.5] shrink-0" />
+            </button>
+          )}
+        </div>
       </header>
 
       {/* ============================================================== */}
